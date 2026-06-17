@@ -8,11 +8,10 @@ export const ROSTER = {
     baseHealth: 200,
     baseAttack: 40,
     passives: ["RESOURCEFUL"],
-    imagePath: "/images/characters/Gil.jpg",
-    // Adding the alt costumes feature explicitly for biomes
+    imagePath: "/images/characters/Gil.png",
     altCostumes: {
-      coast: "/images/characters/Gil_Coast.jpg",
-      plains: "/images/characters/Gil_Plains.jpg"
+      coast: "/images/characters/Gil_Coast.png",
+      plains: "/images/characters/Gil_Plains.png"
     }
   },
   marinska: {
@@ -22,7 +21,7 @@ export const ROSTER = {
     baseHealth: 160,
     baseAttack: 56,
     passives: ["FIRST_STRIKE", "EVASION"],
-    imagePath: "/images/characters/Marinska.jpg"
+    imagePath: "/images/characters/Marinska.png"
   },
   tornadowerewolf: {
     id: "tornadowerewolf",
@@ -31,7 +30,7 @@ export const ROSTER = {
     baseHealth: 180,
     baseAttack: 64,
     passives: ["CLEAVE", "WIND_AFFINITY"],
-    imagePath: "/images/characters/Tornadowerewolf.jpg"
+    imagePath: "/images/characters/Tornadowerewolf.png"
   },
   crocagator: {
     id: "crocagator",
@@ -40,7 +39,7 @@ export const ROSTER = {
     baseHealth: 300,
     baseAttack: 32,
     passives: ["THICK_SCALES", "SWAMP_NATIVE"],
-    imagePath: "/images/characters/Crocagator.jpg"
+    imagePath: "/images/characters/Crocagator.png"
   },
   shiva: {
     id: "shiva",
@@ -49,6 +48,6 @@ export const ROSTER = {
     baseHealth: 220,
     baseAttack: 48,
     passives: ["MYSTIC_AURA"],
-    imagePath: "/images/characters/shiva.jpg"
+    imagePath: "/images/characters/shiva.png"
   }
 };

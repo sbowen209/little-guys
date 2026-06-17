@@ -27,9 +27,9 @@ export default function MainMenu({ onStartRun }) {
   <div key={char.id} className="bg-slate-800 rounded-xl border border-slate-700 flex flex-col hover:border-emerald-500/50 transition-colors overflow-hidden">
     
     {/* Render the default portrait */}
-    <div className="h-64 w-full bg-slate-900 overflow-hidden">
+<div className="h-64 w-full bg-slate-900 overflow-hidden">
       <img 
-        src={char.imagePath} 
+        src={`${import.meta.env.BASE_URL}${char.imagePath.slice(1)}`} 
         alt={char.name} 
         className="w-full h-full object-cover object-top"
       />
