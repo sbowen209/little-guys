@@ -41,7 +41,7 @@ export const ENEMIES = {
     attackPerLevel: 20,
     hpPerCount: 1, // 1 HP = 1 Salamandar
     ability: "TOXIC_SPIT",
-    imagePath: "/images/enemies/Salamandar.jpg"
+    imagePath: "/images/enemies/Salamandar.png"
   },
   mire_man: {
     id: "mire_man",
@@ -54,6 +54,6 @@ export const ENEMIES = {
     attackPerLevel: 20,
     hpPerCount: 2, // 2 HP = 1 Mire Man
     ability: "SLUDGE_GRASP",
-    imagePath: "/images/enemies/MireMan.jpg"
+    imagePath: "/images/enemies/MireMan.png"
   }
 };
