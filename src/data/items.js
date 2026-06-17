@@ -7,11 +7,11 @@ export const ITEMS = {
   monster_parts: { id: "monster_parts", name: "Monster Parts", type: "material", rarity: "common" },
 
   // --- SHARED PLANTS ---
-  plant_red: { id: "plant_red", name: "Crimson Root (Red)", type: "plant" },
-  plant_blue: { id: "plant_blue", name: "Azure Leaf (Blue)", type: "plant" },
-  plant_yellow: { id: "plant_yellow", name: "Amber Bulb (Yellow)", type: "plant" },
-  plant_black: { id: "plant_black", name: "Void Spore (Black)", type: "plant" },
-
+  plant_red: { id: "plant_red", name: "Crimson Root (Red)", type: "plant", imagePath: "/images/resources/Flower_Red.jpg" },
+  plant_blue: { id: "plant_blue", name: "Azure Leaf (Blue)", type: "plant", imagePath: "/images/resources/Flower_Blue.jpg" },
+  plant_yellow: { id: "plant_yellow", name: "Amber Bulb (Gold)", type: "plant", imagePath: "/images/resources/Flower_Gold.jpg" },
+  plant_black: { id: "plant_black", name: "Void Spore (Black)", type: "plant", imagePath: "/images/resources/Flower_Black.jpg" },
+  plant_green: { id: "plant_green", name: "Verdant Sprout (Green)", type: "plant", imagePath: "/images/resources/Flower_Green.jpg" },
   // --- BIOME: SWAMP ---
   mote_earth: { id: "mote_earth", name: "Earth Mote", type: "mote", biome: "swamp" },
   plant_bramble: { id: "plant_bramble", name: "Bramble Thorn", type: "plant", biome: "swamp" },
