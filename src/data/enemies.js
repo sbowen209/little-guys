@@ -1,19 +1,16 @@
-// src/data/enemies.js
-
 export const ENEMIES = {
-  // --- MAIEV SWAMP (MUD/NATURE ZONES) ---
   bog_bug: {
     id: "bog_bug",
     name: "Bog Bug",
     biome: "swamp",
-    zoneType: "mud", // Custom tag to separate from Poison
+    zoneType: "mud",
     baseHealth: 3,
     baseAttack: 80,
     healthPerLevel: 1,
     attackPerLevel: 20,
-    hpPerCount: 1, // 1 HP = 1 Bug
+    hpPerCount: 1,
     ability: "SWARM",
-    imagePath: "/images/enemies/BogBug.png"
+    imagePath: "/images/enemies/BogBug.webp"
   },
   mire_mantis: {
     id: "mire_mantis",
@@ -24,12 +21,10 @@ export const ENEMIES = {
     baseAttack: 120,
     healthPerLevel: 1,
     attackPerLevel: 20,
-    hpPerCount: 1, // 1 HP = 1 Mantis
+    hpPerCount: 1,
     ability: "SCYTHE_STRIKE",
-    imagePath: "/images/enemies/MireMantis.png"
+    imagePath: "/images/enemies/MireMantis.webp"
   },
-
-  // --- MAIEV SWAMP (POISON ZONES) ---
   salamandar: {
     id: "salamandar",
     name: "Salamandar",
@@ -39,9 +34,9 @@ export const ENEMIES = {
     baseAttack: 100,
     healthPerLevel: 1,
     attackPerLevel: 20,
-    hpPerCount: 1, // 1 HP = 1 Salamandar
+    hpPerCount: 1,
     ability: "TOXIC_SPIT",
-    imagePath: "/images/enemies/Salamandar.png"
+    imagePath: "/images/enemies/Salamandar.webp"
   },
   mire_man: {
     id: "mire_man",
@@ -52,8 +47,8 @@ export const ENEMIES = {
     baseAttack: 90,
     healthPerLevel: 1,
     attackPerLevel: 20,
-    hpPerCount: 2, // 2 HP = 1 Mire Man
+    hpPerCount: 2,
     ability: "SLUDGE_GRASP",
-    imagePath: "/images/enemies/MireMan.png"
+    imagePath: "/images/enemies/MireMan.webp"
   }
 };
