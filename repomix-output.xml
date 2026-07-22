@@ -32,7 +32,7 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching these patterns are excluded: game_description.md
+- Files matching these patterns are excluded: codebase.md
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -43,6 +43,7 @@ The content is organized as follows:
 <directory_structure>
 .gitignore
 eslint.config.js
+game_description.md
 index.html
 optimize-images.js
 package.json
@@ -85,6 +86,7 @@ src/components/combat/LootReveal.jsx
 src/components/combat/RewardReveal.jsx
 src/components/map/ExplorationWheel.jsx
 src/components/map/MapGrid.jsx
+src/components/RaceBoard.jsx
 src/components/shared/EventModal.jsx
 src/components/shared/MetaOverlay.jsx
 src/data/biomes.js
@@ -100,13 +102,16 @@ src/data/passives.js
 src/data/rewards.js
 src/hooks/useCombat.js
 src/hooks/useMetaProgress.js
+src/hooks/useRaceEngine.js
 src/hooks/useRunState.js
 src/index.css
 src/lib/passiveEngine.js
 src/main.jsx
 src/utils/assets.js
+src/views/ActiveRace.jsx
 src/views/ActiveRun.jsx
 src/views/MainMenu.jsx
+src/views/RacingSetup.jsx
 src/views/RunSetup.jsx
 src/views/StatsView.jsx
 vite.config.js
@@ -150,7 +155,6 @@ function useAnimatedValue(target, active, duration = 950) {
   return v;
 }
 
-// Edge-anchored vertical meters - with support for dimming discarded Advantage rolls
 function VerticalAtkMeter({ label, atk, maxGlobalAtk, value, mine, win, dim }) {
   const active = value != null;
   const animated = useAnimatedValue(value || 0, active);
@@ -163,21 +167,21 @@ function VerticalAtkMeter({ label, atk, maxGlobalAtk, value, mine, win, dim }) {
   const barGradient = mine ? 'from-emerald-600 via-emerald-500 to-emerald-300' : 'from-rose-700 via-rose-500 to-rose-300';
 
   return (
-    <div className={`flex h-full w-20 shrink-0 flex-col items-center justify-end drop-shadow-2xl transition-all duration-500 ${dim ? 'opacity-40 scale-90 saturate-0' : 'opacity-100'}`}>
+    <div className={`flex h-full w-14 sm:w-16 md:w-20 shrink-0 flex-col items-center justify-end drop-shadow-2xl transition-all duration-500 ${dim ? 'opacity-40 scale-90 saturate-0' : 'opacity-100'}`}>
       <div className="mb-6 flex h-20 flex-col items-center justify-end text-center">
-        <span className={`mb-1 font-mono text-[10px] font-black uppercase tracking-widest ${mine ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <span className={`mb-1 font-mono text-[9px] md:text-[10px] font-black uppercase tracking-widest ${mine ? 'text-emerald-400' : 'text-rose-400'}`}>
           {label}
         </span>
-        <span className="font-mono text-3xl font-black leading-none text-white drop-shadow-md">
+        <span className="font-mono text-2xl md:text-3xl font-black leading-none text-white drop-shadow-md">
           {active ? displayVal : '—'}
         </span>
-        <span className="mt-1 font-mono text-xl font-black text-stone-400 drop-shadow-sm">
+        <span className="mt-1 font-mono text-lg md:text-xl font-black text-stone-400 drop-shadow-sm">
           {atk}
         </span>
       </div>
 
       <div 
-        className="relative flex w-8 flex-col justify-end overflow-hidden rounded-full border-2 border-stone-800 bg-stone-950/80 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] backdrop-blur-sm transition-all duration-500" 
+        className="relative flex w-6 sm:w-8 flex-col justify-end overflow-hidden rounded-full border-2 border-stone-800 bg-stone-950/80 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] backdrop-blur-sm transition-all duration-500" 
         style={{ height: `${heightPct}%` }}
       >
         <div
@@ -196,7 +200,6 @@ function VerticalAtkMeter({ label, atk, maxGlobalAtk, value, mine, win, dim }) {
 }
 
 export default function CombatView({ enemy, character, level, startingHp, zone, affix, passiveFlags, onConsumePassive, onResolve, onHpChange }) {
-  // onHpChange is explicitly wired into useCombat for real-time damage syncing
   const c = useCombat({ enemy, character, level, startingHp, affix, passiveFlags, onConsumePassive, onHpChange });
 
   const bg = {
@@ -207,7 +210,16 @@ export default function CombatView({ enemy, character, level, startingHp, zone, 
 
   const maxGlobalAtk = Math.max(c.playerAttack, c.scaledAttack);
 
-  // Full-screen resolution overlay (handles Victory, Defeat, and Ambush)
+  // Derive CSS Filters for Player Status Tints (Subdued)
+  let portraitTint = 'drop-shadow-[0_15px_35px_rgba(0,0,0,0.95)]';
+  if (c.statuses?.toxic) {
+    portraitTint = 'drop-shadow-[0_15px_35px_rgba(168,85,247,0.5)] sepia-[0.3] hue-rotate-[250deg] saturate-[1.2] brightness-[0.9]';
+  } else if (c.statuses?.poison) {
+    portraitTint = 'drop-shadow-[0_15px_35px_rgba(34,197,94,0.5)] sepia-[0.3] hue-rotate-[70deg] saturate-[1.2]';
+  } else if (c.statuses?.vulnerable) {
+    portraitTint = 'drop-shadow-[0_15px_35px_rgba(56,189,248,0.5)] sepia-[0.3] hue-rotate-[180deg] saturate-[1.2]';
+  }
+
   if (c.outcome) {
     const win = c.outcome.victory;
     const isAmbush = c.outcome.extraEncounter;
@@ -257,22 +269,18 @@ export default function CombatView({ enemy, character, level, startingHp, zone, 
 
   return (
     <div className="absolute inset-0 h-full w-full overflow-hidden bg-stone-950">
-      {/* Full-bleed immersive background */}
       <div className="absolute inset-0 z-0" style={bg} />
 
-      {/* Screen-wide flash effects */}
       {(c.flash === 'enemyHit' || c.flash === 'playerHit') && (
         <div className={`pointer-events-none absolute inset-0 z-50 animate-[hitFlash_0.35s_ease-out] ${
           c.flash === 'enemyHit' ? 'bg-emerald-400/20' : 'bg-rose-500/25'
         }`} />
       )}
 
-      {/* ABSOLUTE LHS: Hero Attack Meter */}
       <div className="absolute left-2 top-1/2 z-30 h-[60vh] -translate-y-1/2 md:left-6">
         <VerticalAtkMeter label="You" atk={c.playerAttack} maxGlobalAtk={maxGlobalAtk} value={c.roll?.player} mine win={c.roll?.playerWins} />
       </div>
 
-      {/* ABSOLUTE RHS: Support for Twin Advantage Meters or Standard Meter */}
       <div className="absolute right-2 top-1/2 z-30 flex h-[60vh] -translate-y-1/2 items-center justify-center gap-1 md:right-6 md:gap-4">
         {c.roll?.enemyRolls ? (
           <>
@@ -304,11 +312,9 @@ export default function CombatView({ enemy, character, level, startingHp, zone, 
         )}
       </div>
 
-      {/* STAGE CENTER: Smart Staggered Enemy Swarm Container */}
       <div className="absolute inset-0 z-20 flex items-center justify-center pb-32 pointer-events-none">
         <div className="flex w-full flex-wrap items-center justify-center pointer-events-auto">
            {Array.from({ length: c.count }).map((_, i) => {
-             // Logic to create a deep, layered look for large packs of enemies
              const isSwarm = c.count >= 3;
              const overlap = isSwarm && i > 0 ? '-ml-12 md:-ml-24' : 'mx-3';
              const stagger = isSwarm && i % 2 !== 0 ? 'translate-y-6 md:translate-y-12' : '';
@@ -328,22 +334,19 @@ export default function CombatView({ enemy, character, level, startingHp, zone, 
         </div>
       </div>
 
-      {/* ABSOLUTE BOTTOM LEFT: Smaller, better proportioned Hero Portrait */}
       <div className="pointer-events-none absolute bottom-0 left-2 z-50 flex h-[55vh] w-[45vw] items-end justify-start md:left-12">
          <img
            src={assetUrl(character.imagePath)}
            alt={character.name}
            draggable={false}
-           className={`max-h-full w-auto object-contain object-bottom drop-shadow-[0_15px_35px_rgba(0,0,0,0.95)] ${
+           className={`max-h-full w-auto object-contain object-bottom transition-all duration-500 ${portraitTint} ${
              c.flash === 'shrug' ? 'animate-[shrugOff_0.6s_ease-in-out]' : c.flash === 'playerHit' ? 'animate-[battleShake_0.35s]' : ''
            }`}
          />
       </div>
 
-      {/* DOCKED BOTTOM: Elongated, Left-Shifted Action Console */}
       <div className="absolute bottom-6 right-4 z-40 flex w-[95%] max-w-4xl flex-row items-center justify-between rounded-[2rem] border border-stone-700/50 bg-stone-950/85 px-8 py-6 shadow-[0_20px_60px_rgba(0,0,0,0.8)] backdrop-blur-xl md:bottom-8 md:right-[10%]">
         
-        {/* Left: Attack Button Block */}
         <div className="flex shrink-0 flex-col items-center gap-3">
           {c.roll ? (
              <span className="animate-[lootPop_0.3s_ease-out] font-serif text-3xl font-black text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] md:text-4xl">⚔</span>
@@ -361,7 +364,6 @@ export default function CombatView({ enemy, character, level, startingHp, zone, 
           </button>
         </div>
 
-        {/* Center: Centered Combat Logs */}
         <div className="flex flex-1 flex-col items-center justify-center overflow-hidden px-4 text-center">
           {c.log.slice(-3).map((l, idx, arr) => {
             const isLatest = idx === arr.length - 1;
@@ -379,7 +381,6 @@ export default function CombatView({ enemy, character, level, startingHp, zone, 
           })}
         </div>
 
-        {/* Right: Integrated Enemy Data Block */}
         <div className="flex shrink-0 flex-col items-center justify-center gap-2 border-l border-stone-700/50 pl-6">
           <span className="font-serif text-2xl font-black tracking-widest text-rose-300 drop-shadow-md md:text-3xl">
             {enemy.name}
@@ -1103,6 +1104,310 @@ export default function MapGrid({ position, visited, movement, mapAffixes, prosp
 }
 </file>
 
+<file path="src/components/RaceBoard.jsx">
+import { assetUrl } from '../utils/assets';
+
+// -----------------------------------------------------------------------------
+// PROCEDURAL ENVIRONMENT COMPONENTS (VISUALLY ENHANCED)
+// -----------------------------------------------------------------------------
+
+const Tree = ({ cx, cy, r }) => (
+  <g filter="url(#drop-shadow)">
+    <circle cx={cx} cy={cy} r={r} fill="url(#tree-base)" />
+    <circle cx={cx - r * 0.15} cy={cy - r * 0.15} r={r * 0.7} fill="url(#tree-mid)" />
+    <circle cx={cx + r * 0.2} cy={cy + r * 0.15} r={r * 0.4} fill="url(#tree-highlight)" opacity="0.8" />
+  </g>
+);
+
+const LilyPad = ({ cx, cy, scale = 1, rot = 0 }) => (
+  <g transform={`translate(${cx}, ${cy}) scale(${scale}) rotate(${rot})`} filter="url(#drop-shadow)">
+    <path d="M 12 0 A 12 12 0 1 1 -12 0 A 12 12 0 0 1 -3 -10 L 0 0 L 3 -10 A 12 12 0 0 1 12 0 Z" fill="url(#lilypad-grad)" />
+    <path d="M 12 0 A 12 12 0 1 1 -12 0 A 12 12 0 0 1 -3 -10 L 0 0 L 3 -10 A 12 12 0 0 1 12 0 Z" fill="none" stroke="#65a345" strokeWidth="0.5" opacity="0.6"/>
+  </g>
+);
+
+const SwampPond = () => (
+  <g filter="url(#drop-shadow)">
+    <path d="M 300 220 C 340 130, 480 130, 530 190 C 620 260, 560 360, 480 340 C 360 340, 230 330, 300 220 Z" fill="url(#swamp-water-grad)" />
+    <path d="M 300 220 C 340 130, 480 130, 530 190 C 620 260, 560 360, 480 340 C 360 340, 230 330, 300 220 Z" fill="none" stroke="#162e1c" strokeWidth="4" opacity="0.8" />
+    <path d="M 315 225 C 345 145, 475 145, 515 200 C 590 260, 545 345, 475 325 C 375 325, 260 315, 315 225 Z" fill="none" stroke="#376643" strokeWidth="1.5" opacity="0.3" />
+    
+    <LilyPad cx="340" cy="180" scale={1.3} rot={45} />
+    <LilyPad cx="370" cy="205" scale={0.9} rot={120} />
+    <LilyPad cx="480" cy="310" scale={1.6} rot={-30} />
+    <LilyPad cx="515" cy="285" scale={1.1} rot={15} />
+    <LilyPad cx="305" cy="265" scale={1.2} rot={80} />
+    <LilyPad cx="540" cy="230" scale={0.9} rot={160} />
+  </g>
+);
+
+const SwampBarn = () => (
+  <g transform="translate(680, 160)" filter="url(#drop-shadow)">
+    {/* Base structure outline/shadow */}
+    <rect x="-5" y="-5" width="130" height="135" fill="#140a08" rx="2" />
+    {/* Wooden Frame */}
+    <rect x="0" y="30" width="120" height="95" fill="url(#barn-wood)" />
+    {/* Pitched Roof */}
+    <path d="M -15 35 L 60 -15 L 135 35 L 125 45 L 60 -1 L -5 45 Z" fill="#202e2b" />
+    <path d="M 60 -15 L 135 35 L 125 45 L 60 -1 Z" fill="#2d3b39" />
+    {/* Glowing Window */}
+    <circle cx="60" cy="45" r="16" fill="#f59e0b" filter="url(#window-glow)" />
+    <circle cx="60" cy="45" r="16" fill="none" stroke="#261007" strokeWidth="2" />
+    <path d="M 60 29 L 60 61 M 44 45 L 76 45" stroke="#261007" strokeWidth="3" />
+    {/* Creepy Doorway */}
+    <path d="M 40 125 L 40 85 Q 60 75 80 85 L 80 125 Z" fill="#050302" />
+  </g>
+);
+
+const Fireflies = () => {
+  const positions = [
+    {x: 340, y: 190}, {x: 500, y: 310}, {x: 400, y: 250}, 
+    {x: 550, y: 210}, {x: 290, y: 290}, {x: 700, y: 320}, 
+    {x: 640, y: 160}, {x: 800, y: 250}, {x: 220, y: 220},
+    {x: 850, y: 190}, {x: 180, y: 380}, {x: 1000, y: 300}
+  ];
+  
+  return (
+    <g>
+      {positions.map((pos, i) => (
+        <g key={i}>
+          <circle cx={pos.x} cy={pos.y} r="6" fill="#d9f564" filter="url(#firefly-glow)" opacity="0.6">
+            <animate attributeName="opacity" values="0; 0.8; 0" dur={`${2.5 + (i % 3)}s`} begin={`${i * 0.4}s`} repeatCount="indefinite" />
+          </circle>
+          <circle cx={pos.x} cy={pos.y} r="1.5" fill="#eaff8a">
+            <animate attributeName="opacity" values="0.1; 1; 0.1" dur={`${2.5 + (i % 3)}s`} begin={`${i * 0.4}s`} repeatCount="indefinite" />
+          </circle>
+        </g>
+      ))}
+    </g>
+  );
+};
+
+const ProceduralFences = () => {
+  const spacing = 35;
+  const points = [];
+
+  const addLine = (y, startX, endX) => {
+    const dir = startX < endX ? 1 : -1;
+    const dist = Math.abs(endX - startX);
+    const steps = Math.floor(dist / spacing);
+    for (let i = 0; i <= steps; i++) {
+      points.push({ x: startX + (i * spacing * dir), y });
+    }
+  };
+
+  const addArc = (cx, cy, r, startAngle, endAngle) => {
+    const arcLen = Math.abs(endAngle - startAngle) * r;
+    const steps = Math.floor(arcLen / spacing);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const a = startAngle + t * (endAngle - startAngle);
+      points.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+    }
+  };
+
+  addLine(60, 250, 950);
+  addArc(950, 250, 190, -Math.PI/2, Math.PI/2);
+  addLine(440, 950, 250);
+  addArc(250, 250, 190, Math.PI/2, (3*Math.PI)/2);
+
+  addLine(140, 250, 950);
+  addArc(950, 250, 110, -Math.PI/2, Math.PI/2);
+  addLine(360, 950, 250);
+  addArc(250, 250, 110, Math.PI/2, (3*Math.PI)/2);
+
+  return (
+    <g>
+      <path d="M 250 60 L 950 60 A 190 190 0 0 1 950 440 L 250 440 A 190 190 0 0 1 250 60 Z" fill="none" stroke="#1c110b" strokeWidth="2.5" opacity="0.8" filter="url(#drop-shadow)"/>
+      <path d="M 250 140 L 950 140 A 110 110 0 0 1 950 360 L 250 360 A 110 110 0 0 1 250 140 Z" fill="none" stroke="#1c110b" strokeWidth="2.5" opacity="0.8" filter="url(#drop-shadow)"/>
+      {points.map((p, i) => (
+        <g key={i} transform={`translate(${p.x}, ${p.y})`} filter="url(#drop-shadow)">
+          <circle r="4.5" fill="#362217" />
+          <circle r="2.5" fill="#5c3b28" />
+        </g>
+      ))}
+    </g>
+  );
+};
+
+// -----------------------------------------------------------------------------
+// MAIN COMPONENT
+// -----------------------------------------------------------------------------
+
+export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRacerIndex, isFinished }) {
+  return (
+    <div className="w-full max-w-6xl p-4">
+      <svg viewBox="0 0 1200 500" className="w-full drop-shadow-[0_25px_35px_rgba(0,0,0,0.9)] rounded-3xl overflow-hidden border-4 border-stone-800">
+        <defs>
+          <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="4" dy="8" stdDeviation="5" floodColor="#000" floodOpacity="0.8"/>
+          </filter>
+          
+          <filter id="window-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+
+          <filter id="firefly-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+
+          {/* Gradients for Assets */}
+          <radialGradient id="tree-base" cx="40%" cy="40%" r="60%">
+            <stop offset="0%" stopColor="#224227" />
+            <stop offset="100%" stopColor="#0e1a0f" />
+          </radialGradient>
+          <radialGradient id="tree-mid" cx="35%" cy="35%" r="60%">
+            <stop offset="0%" stopColor="#315e37" />
+            <stop offset="100%" stopColor="#1b361e" />
+          </radialGradient>
+          <radialGradient id="tree-highlight" cx="30%" cy="30%" r="50%">
+            <stop offset="0%" stopColor="#417a47" />
+            <stop offset="100%" stopColor="#254a2a" />
+          </radialGradient>
+
+          <radialGradient id="swamp-water-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#1a3b37" />
+            <stop offset="70%" stopColor="#112925" />
+            <stop offset="100%" stopColor="#0c1f1c" />
+          </radialGradient>
+
+          <radialGradient id="lilypad-grad" cx="30%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#5d9c3e" />
+            <stop offset="100%" stopColor="#365e23" />
+          </radialGradient>
+
+          <radialGradient id="vignette" cx="50%" cy="50%" r="75%">
+            <stop offset="60%" stopColor="#000000" stopOpacity="0" />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0.6" />
+          </radialGradient>
+
+          {/* Patterns */}
+          <pattern id="checkers" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+            <rect width="10" height="10" fill="#d6d3d1" />
+            <rect x="10" width="10" height="10" fill="#1c1917" />
+            <rect y="10" width="10" height="10" fill="#1c1917" />
+            <rect x="10" y="10" width="10" height="10" fill="#d6d3d1" />
+          </pattern>
+
+          <pattern id="barn-wood" x="0" y="0" width="20" height="100" patternUnits="userSpaceOnUse">
+            <rect width="20" height="100" fill="#3b2723" />
+            <rect x="18" width="2" height="100" fill="#241613" />
+            <path d="M 0 10 Q 10 15 20 5 M 0 40 Q 10 35 20 45 M 0 80 Q 10 75 20 85" stroke="#241613" strokeWidth="1" fill="none" />
+          </pattern>
+
+          <pattern id="wood-log" x="0" y="0" width="20" height="80" patternUnits="userSpaceOnUse">
+            <rect width="20" height="80" fill="#4a3123" />
+            <path d="M 0 10 Q 10 15 20 5 M 0 30 Q 10 25 20 35 M 0 50 Q 10 55 20 45 M 0 70 Q 10 65 20 75" stroke="#291a11" strokeWidth="2" fill="none" />
+            <rect width="3" height="80" fill="#291a11" opacity="0.8" />
+            <rect x="17" width="3" height="80" fill="#291a11" opacity="0.8" />
+          </pattern>
+
+          <pattern id="swamp-grass" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+            <rect width="80" height="80" fill="#172114" />
+            <circle cx="20" cy="20" r="30" fill="#1c2918" opacity="0.6" />
+            <circle cx="60" cy="60" r="40" fill="#21301d" opacity="0.5" />
+            <path d="M 10 30 Q 12 20 15 30 Q 12 35 10 30 Z" fill="#2b4023" />
+            <path d="M 50 70 Q 55 55 60 70 Q 55 75 50 70 Z" fill="#2b4023" />
+            <path d="M 25 25 L 22 15 M 25 25 L 28 17 M 25 25 L 32 20" stroke="#11170f" strokeWidth="1.5" strokeLinecap="round" opacity="0.9"/>
+          </pattern>
+
+          <pattern id="mud-track" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+            <rect width="100" height="100" fill="#301f14" />
+            <path d="M 0 20 C 30 10, 60 40, 100 20" stroke="#1f130b" strokeWidth="5" fill="none" opacity="0.8" />
+            <path d="M 0 70 C 40 90, 50 50, 100 70" stroke="#1f130b" strokeWidth="4" fill="none" opacity="0.8" />
+            <path d="M 30 0 L 40 30 L 20 60 L 50 100" stroke="#1f130b" strokeWidth="2" fill="none" opacity="0.6" />
+            <circle cx="25" cy="25" r="3" fill="#140c07" opacity="0.9" />
+            <circle cx="85" cy="40" r="2" fill="#140c07" opacity="0.9" />
+            <circle cx="70" cy="85" r="4" fill="#140c07" opacity="0.7" />
+            <circle cx="15" cy="80" r="2.5" fill="#140c07" opacity="0.9" />
+          </pattern>
+        </defs>
+
+        {/* Base Layer */}
+        <rect width="1200" height="500" fill="url(#swamp-grass)" />
+
+        {/* Back Environment */}
+        <Tree cx="120" cy="80" r="55" />
+        <Tree cx="1080" cy="110" r="70" />
+        <Tree cx="90" cy="420" r="60" />
+        <Tree cx="1120" cy="400" r="50" />
+        
+        <SwampPond />
+        <SwampBarn />
+        <Tree cx="880" cy="280" r="45" />
+        <Tree cx="200" cy="250" r="40" />
+
+        {/* Track Outline/Shadow */}
+        <path d="M 250 100 L 950 100 A 150 150 0 0 1 950 400 L 250 400 A 150 150 0 0 1 250 100 Z" fill="none" stroke="#140c07" strokeWidth="86" strokeLinecap="square" filter="url(#drop-shadow)" opacity="0.6"/>
+        
+        {/* Main Track */}
+        <path d="M 250 100 L 950 100 A 150 150 0 0 1 950 400 L 250 400 A 150 150 0 0 1 250 100 Z" fill="none" stroke="url(#mud-track)" strokeWidth="80" strokeLinecap="square" />
+        
+        {/* Start Line */}
+        <rect x="230" y="60" width="40" height="80" fill="url(#checkers)" filter="url(#drop-shadow)" />
+
+        <ProceduralFences />
+
+        {/* Jump Logs */}
+        <rect x="590" y="60" width="20" height="80" fill="url(#wood-log)" filter="url(#drop-shadow)" />
+        <rect x="800" y="360" width="20" height="80" fill="url(#wood-log)" filter="url(#drop-shadow)" />
+        <rect x="590" y="360" width="20" height="80" fill="url(#wood-log)" filter="url(#drop-shadow)" />
+        <rect x="380" y="360" width="20" height="80" fill="url(#wood-log)" filter="url(#drop-shadow)" />
+
+        <Fireflies />
+
+        {/* Top Vignette Overlay for Atmosphere */}
+        <rect width="1200" height="500" fill="url(#vignette)" pointerEvents="none" />
+
+        {/* Track Helper Text */}
+        <g className="font-serif text-[18px] font-black fill-stone-300 opacity-70 drop-shadow-md">
+           <text x="425" y="45" textAnchor="middle">25 straight</text>
+           <text x="600" y="165" textAnchor="middle">10 Jump</text>
+           <text x="775" y="45" textAnchor="middle">25 straight</text>
+           <text x="1050" y="255" textAnchor="middle" transform="rotate(90, 1050, 255)">25 turn</text>
+           <text x="880" y="345" textAnchor="middle">10 straight</text>
+           <text x="810" y="465" textAnchor="middle">10 Jump</text>
+           <text x="705" y="345" textAnchor="middle">15 straight</text>
+           <text x="600" y="465" textAnchor="middle">15 Jump</text>
+           <text x="495" y="345" textAnchor="middle">15 straight</text>
+           <text x="390" y="465" textAnchor="middle">10 Jump</text>
+           <text x="320" y="345" textAnchor="middle">10 straight</text>
+           <text x="150" y="255" textAnchor="middle" transform="rotate(-90, 150, 255)">25 turn</text>
+        </g>
+
+        {/* Racer 1 Token */}
+        <foreignObject 
+          x={r1Coords.x} 
+          y={r1Coords.y} 
+          width="50" 
+          height="50"
+          style={{ transition: 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+        >
+          <div className={`flex h-full w-full items-center justify-center rounded-full border-4 border-amber-400 bg-stone-900 shadow-xl drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] ${activeRacerIndex === 0 && !isFinished ? 'ring-4 ring-amber-400/50' : ''}`}>
+            <img src={assetUrl(racer1.imagePath)} alt={racer1.name} className="h-full w-full rounded-full object-contain p-0.5" draggable={false} />
+          </div>
+        </foreignObject>
+        
+        {/* Racer 2 Token */}
+        <foreignObject 
+          x={r2Coords.x} 
+          y={r2Coords.y} 
+          width="50" 
+          height="50"
+          style={{ transition: 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+        >
+          <div className={`flex h-full w-full items-center justify-center rounded-full border-4 border-rose-500 bg-stone-900 shadow-xl drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] ${activeRacerIndex === 1 && !isFinished ? 'ring-4 ring-rose-500/50' : ''}`}>
+            <img src={assetUrl(racer2.imagePath)} alt={racer2.name} className="h-full w-full rounded-full object-contain p-0.5" draggable={false} />
+          </div>
+        </foreignObject>
+      </svg>
+    </div>
+  );
+}
+</file>
+
 <file path="src/components/shared/EventModal.jsx">
 // src/components/EventModal.jsx
 export default function EventModal({ text, onContinue, onReroll, canReroll }) {
@@ -1312,10 +1617,29 @@ export const ENEMY_ABILITIES = {
     name: 'Poison',
     hooks: {
       onEnemyWinningHit: (ctx) => {
-        // 50% chance to inflict 1 extra damage
+        // 50% chance to inflict 1 extra damage AND apply the poisoned visual state
         if (Math.random() < 0.5) {
           ctx.damage = (ctx.damage || 1) + 1;
-          ctx.newLogs.push({ text: "Poison triggers! You take 1 extra damage.", kind: "enemy" });
+          
+          if (!ctx.combatState.playerPoisoned) {
+            ctx.newLogs.push({ text: "Poison triggers! You take 1 extra damage and are Poisoned.", kind: "enemy" });
+          } else {
+            ctx.newLogs.push({ text: "Poison triggers! You take 1 extra damage.", kind: "enemy" });
+          }
+          
+          // Set duration to 2 so it survives this turn's immediate cleanup, 
+          // remains visible for the next idle phase, and clears after the next clash.
+          ctx.combatState.playerPoisoned = 2; 
+        }
+        return ctx;
+      },
+      onTurnEnd: (ctx) => {
+        // Tick down the poison duration each turn
+        if (ctx.combatState.playerPoisoned > 0) {
+          ctx.combatState.playerPoisoned -= 1;
+          if (ctx.combatState.playerPoisoned === 0) {
+            ctx.newLogs.push({ text: "The poison wears off.", kind: "info" });
+          }
         }
         return ctx;
       }
@@ -1343,11 +1667,13 @@ export const ENEMY_ABILITIES = {
     name: 'Weakening Spores',
     hooks: {
       onEnemyWinningHit: (ctx) => {
+        // Logs penalty in the current combat block to be exported at combat resolution
         ctx.combatState.playerAtkPenalty = (ctx.combatState.playerAtkPenalty || 0) + 10;
-        ctx.newLogs.push({ text: "Weakening spores cloud your lungs! -10 ATK for the cycle.", kind: "enemy" });
+        ctx.newLogs.push({ text: "Weakening spores cloud your lungs! -10 ATK for the run.", kind: "enemy" });
         return ctx;
       },
       modifyPlayerStats: (ctx) => {
+        // Applies immediately in current fight, useRunState handles persistence later
         if (ctx.combatState.playerAtkPenalty) {
           ctx.playerAtk = Math.max(0, ctx.playerAtk - ctx.combatState.playerAtkPenalty);
         }
@@ -1366,7 +1692,7 @@ export const ENEMY_ABILITIES = {
           ctx.newLogs.push({ text: "The Moteling exposes your defenses. You are Vulnerable!", kind: "enemy" });
         } else {
           ctx.damage = (ctx.damage || 1) + 1;
-          ctx.combatState.playerVulnerable = false;
+          ctx.combatState.playerVulnerable = false; // Automatically clears the visual tint
           ctx.newLogs.push({ text: "Vulnerable triggered! You take 1 extra damage.", kind: "enemy" });
         }
         return ctx;
@@ -1385,13 +1711,11 @@ export const ENEMY_ABILITIES = {
       }
     }
   },
-// Add this inside your ENEMY_ABILITIES object in src/data/enemyAbilities.js
   death_summon: {
     id: 'death_summon',
     name: 'Death Throe Summon',
     hooks: {
       onEnemyDeath: (ctx) => {
-        // 100% chance to trigger for testing purposes
         if (Math.random() <= 1.0) {
           ctx.extraEncounter = true;
           ctx.newLogs.push({ text: "The poacher's released beasts attack!", kind: "info" });
@@ -1412,7 +1736,6 @@ export const ENEMY_ABILITIES = {
         return ctx;
       },
       onTurnEnd: (ctx) => {
-        // 25% chance of taking 1 damage at the end of the turn
         if (ctx.combatState.playerToxic && Math.random() < 0.25) {
           ctx.playerHpLoss = (ctx.playerHpLoss || 0) + 1;
           ctx.newLogs.push({ text: "Toxic venom burns your veins! You lose 1 HP.", kind: "enemy" });
@@ -1426,7 +1749,6 @@ export const ENEMY_ABILITIES = {
     name: 'Mire Regeneration',
     hooks: {
       onTurnEnd: (ctx) => {
-        // 1/4 chance to gain 1 HP each turn
         if (Math.random() < 0.25 && ctx.enemyHp < ctx.enemyMaxHp) {
           ctx.enemyHpGain = (ctx.enemyHpGain || 0) + 1;
           ctx.newLogs.push({ text: "The Mire Man absorbs the swamp and heals 1 HP!", kind: "enemy" });
@@ -1435,8 +1757,6 @@ export const ENEMY_ABILITIES = {
       }
     }
   },
-
-  // --- Retained L2/L3 Abilities for existing enemies ---
   scythe_strike: {
     id: 'scythe_strike',
     name: 'Scythe Strike',
@@ -1474,7 +1794,6 @@ export const ENEMY_ABILITIES = {
 </file>
 
 <file path="src/data/heroes.js">
-// src/data/heroes.js
 export const HEROES = {
   gil: {
     id: 'gil',
@@ -1489,9 +1808,10 @@ export const HEROES = {
       coast: '/images/characters/Gil_Coast.webp',
       plains: '/images/characters/Gil_Plains.webp',
     },
+    racingStats: { speed: 20, jump: 15, turning: 10 }, // The Balanced Baseline
   },
   marinska: {
-    id: 'marinska', // Keeping ID intact to avoid breaking save data
+    id: 'marinska',
     name: 'Marinska',
     description: 'Too few look to the skies before it is too late.',
     baseHealth: 5,
@@ -1499,6 +1819,7 @@ export const HEROES = {
     elements: ['shadow', 'air'],
     passives: ['take_flight'],
     imagePath: '/images/characters/Marinska.webp',
+    racingStats: { speed: 18, jump: 22, turning: 8 }, // High jump, lower turn
   },
   tornadowerewolf: {
     id: 'tornadowerewolf',
@@ -1509,6 +1830,7 @@ export const HEROES = {
     elements: ['air'],
     passives: ['sweeping_wind'],
     imagePath: '/images/characters/Tornadowerewolf.webp',
+    racingStats: { speed: 25, jump: 12, turning: 6 }, // Blistering speed, awful handling
   },
   crocagator: {
     id: 'crocagator',
@@ -1519,6 +1841,7 @@ export const HEROES = {
     elements: ['water'],
     passives: ['thickhide'],
     imagePath: '/images/characters/Crocagator.webp',
+    racingStats: { speed: 15, jump: 18, turning: 12 }, // Slower, but clears obstacles well
   },
   shiva: {
     id: 'shiva',
@@ -1529,6 +1852,7 @@ export const HEROES = {
     elements: ['earth'],
     passives: ['looking_for_trouble'],
     imagePath: '/images/characters/shiva.webp',
+    racingStats: { speed: 19, jump: 13, turning: 18 }, // Excellent cornering
   },
 };
 
@@ -1895,6 +2219,9 @@ export function useCombat({
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
   const [roll, setRoll] = useState(null);
+  
+  // Expose status effects to the UI so it can render the CSS tints
+  const [statuses, setStatuses] = useState({ poison: false, toxic: false, vulnerable: false });
 
   // Persistent combat state for the engine (buffs, debuffs, trackers)
   const combatState = useRef({});
@@ -1916,7 +2243,7 @@ export function useCombat({
     if (outcome || busy) return;
     setBusy(true);
 
-// ==========================================
+    // ==========================================
     // PHASE 1: PRE-ROLL (Stat Modifiers)
     // ==========================================
     let phase1Ctx = {
@@ -1964,8 +2291,6 @@ export function useCombat({
     let matchOutcome = null;
     let lingerTime = 1400;
 
-    // ... (The rest of the phases remain exactly the same, but pass finalEnemyRoll to onEnemyWinningHit in Phase 2)
-
     // ==========================================
     // PHASE 2: RESOLUTION (Winning Hit Hooks)
     // ==========================================
@@ -1989,9 +2314,9 @@ export function useCombat({
       }
 
     } else {
-      let eCtx = runEnemyHook(enemy, 'onEnemyWinningHit', { combatState: combatState.current, damage: 1, newLogs: [], enemyRoll });
+      let eCtx = runEnemyHook(enemy, 'onEnemyWinningHit', { combatState: combatState.current, damage: 1, newLogs: [], enemyRoll: finalEnemyRoll });
       
-      const surplus = enemyRoll - playerRoll;
+      const surplus = finalEnemyRoll - playerRoll;
       let pCtx = runPassiveHook(character, 'modifyIncomingDamage', { damage: eCtx.damage, surplus });
 
       const dmg = Math.max(0, pCtx.damage);
@@ -2036,6 +2361,13 @@ export function useCombat({
       cleanupCtx.newLogs.forEach(l => pushLog(l.text, l.kind));
     }
 
+    // Sync visual status flags so CombatView triggers CSS tints
+    setStatuses({
+      poison: !!combatState.current.playerPoisoned,
+      toxic: !!combatState.current.playerToxic,
+      vulnerable: !!combatState.current.playerVulnerable
+    });
+
     // Check Player Death (after both hit resolution and cleanup DoTs)
     if (nextPlayerHp <= 0) {
       let defCtx = runPassiveHook(character, 'onWouldBeDefeated', { prevented: false, newHp: 0, consume: null, runFlags: passiveFlags });
@@ -2050,7 +2382,7 @@ export function useCombat({
           pushLog('Take Flight triggers! You escape to the skies...', 'dodge');
           lingerTime = 2500;
           matchEnded = true;
-          matchOutcome = { escaped: true, remainingHp: defCtx.newHp, loot: [] };
+          matchOutcome = { escaped: true, remainingHp: defCtx.newHp, loot: [], accumulatedPenalty: combatState.current.playerAtkPenalty || 0 };
         } else {
           setFlash('shrug');
           pushLog('A fatal blow — but you cling to life at 1 HP!', 'dodge');
@@ -2060,7 +2392,7 @@ export function useCombat({
         setPlayerHp(0);
         setFlash('playerHit');
         matchEnded = true;
-        matchOutcome = { victory: false, remainingHp: 0, loot: [] };
+        matchOutcome = { victory: false, remainingHp: 0, loot: [], accumulatedPenalty: combatState.current.playerAtkPenalty || 0 };
         pushLog('You have fallen...', 'lose');
       }
     }
@@ -2082,7 +2414,8 @@ export function useCombat({
         victory: true,
         remainingHp: nextPlayerHp,
         loot: [{ id: enemy.drop || 'monster_parts', qty: (1 + level) * (affix === 'Dangerous' ? 2 : 1) }],
-        extraEncounter: deathCtx.extraEncounter
+        extraEncounter: deathCtx.extraEncounter,
+        accumulatedPenalty: combatState.current.playerAtkPenalty || 0
       };
       
       pushLog(`The ${enemy.name} is defeated!`, 'win');
@@ -2101,6 +2434,25 @@ export function useCombat({
     setBusy(false);
   }, [outcome, busy, enemyHp, playerHp, count, level, character, scaled, enemy, passiveFlags, affix, onConsumePassive]);
 
+  // ==========================================
+  // DERIVED UI STATS
+  // ==========================================
+  // Predict current stats for the UI so attack bars dynamically scale 
+  // when abilities like Enrage or Weakening Spores trigger mid-fight.
+  let liveCtx = {
+    combatState: combatState.current,
+    enemyAtk: scaled.attack,
+    playerAtk: character.baseAttack,
+    enemyHp,
+    playerHp
+  };
+  
+  liveCtx = runEnemyHook(enemy, 'modifyEnemyStats', liveCtx);
+  liveCtx = runEnemyHook(enemy, 'modifyPlayerStats', liveCtx);
+
+  const currentEnemyAtk = Math.max(0, liveCtx.enemyAtk);
+  const currentPlayerAtk = Math.max(0, liveCtx.playerAtk);
+
   return {
     enemyHp,
     maxEnemyHp: scaled.health,
@@ -2112,9 +2464,10 @@ export function useCombat({
     busy,
     flash,
     roll,
+    statuses,
     attack,
-    scaledAttack: scaled.attack,
-    playerAttack: character.baseAttack,
+    scaledAttack: currentEnemyAtk,   // <-- Now feeding live dynamic value to UI
+    playerAttack: currentPlayerAtk,  // <-- Now feeding live dynamic value to UI
   };
 }
 </file>
@@ -2199,6 +2552,142 @@ export function useMetaProgress() {
 }
 </file>
 
+<file path="src/hooks/useRaceEngine.js">
+import { useState, useCallback } from 'react';
+
+// Hardcoded for "The Oval Circuit" based on our SVG Map
+// Total Length: 150 units
+const TRACK_DATA = {
+  length: 150,
+  jumps: {
+    25: 10,   // Position: 25, Difficulty: 10
+    85: 10,   // Position: 85, Difficulty: 10
+    100: 15,  // Position: 100, Difficulty: 15
+    115: 10,  // Position: 115, Difficulty: 10
+  },
+  turns: [
+    { start: 50, end: 75 },
+    { start: 125, end: 150 },
+  ],
+};
+
+const rollDice = (max) => Math.floor(Math.random() * max) + 1;
+
+export function useRaceEngine(initialRacers) {
+  const [activeRacerIndex, setActiveRacerIndex] = useState(0);
+  const [isFinished, setIsFinished] = useState(false);
+  const [winner, setWinner] = useState(null);
+  const [logs, setLogs] = useState(["Engine Initialized. Racers ready."]);
+
+  // Extend initial racers with race state
+  const [racers, setRacers] = useState(
+    initialRacers.map((r, i) => ({
+      ...r,
+      engineId: `racer_${i}`,
+      position: 0,
+      isPenalized: false,
+    }))
+  );
+
+  const addLog = (msg) => {
+    setLogs((prev) => [...prev, msg]);
+  };
+
+  const takeTurn = useCallback(() => {
+    if (isFinished) return;
+
+    setRacers((prevRacers) => {
+      const currentRacers = [...prevRacers];
+      const racer = { ...currentRacers[activeRacerIndex] };
+      const stats = racer.racingStats;
+      let pos = racer.position;
+
+      // 1. Determine Starting Terrain & Base Stat
+      const isInTurn = TRACK_DATA.turns.some((t) => pos >= t.start && pos < t.end);
+      const activeStat = isInTurn ? stats.turning : stats.speed;
+      const statName = isInTurn ? 'Turn' : 'Speed';
+
+      // 2. Roll for movement (apply penalty if active)
+      let movement = rollDice(activeStat);
+      
+      if (racer.isPenalized) {
+        movement = Math.floor(movement / 2);
+        racer.isPenalized = false; // Reset penalty after applying
+        addLog(`${racer.name} is recovering. Rolled ${movement} (${statName}, halved).`);
+      } else {
+        addLog(`${racer.name} rolls ${movement} for ${statName}.`);
+      }
+
+      // 3. Process Movement Unit-by-Unit
+      let movementRemaining = movement;
+      let stoppedEarly = false;
+
+      while (movementRemaining > 0 && pos < TRACK_DATA.length) {
+        const nextPos = pos + 1;
+
+        // Check if crossing INTO a turn from a straight
+        const hitsTurnBoundary = TRACK_DATA.turns.some((t) => t.start === nextPos);
+        if (hitsTurnBoundary && !isInTurn) {
+          pos = nextPos;
+          addLog(`${racer.name} hits a turn and loses remaining momentum.`);
+          stoppedEarly = true;
+          break;
+        }
+
+        // Check if hitting a Jump
+        if (TRACK_DATA.jumps[nextPos]) {
+          const jumpDiff = TRACK_DATA.jumps[nextPos];
+          pos = nextPos;
+          const jumpRoll = rollDice(stats.jump);
+
+          if (jumpRoll >= jumpDiff) {
+            addLog(`${racer.name} cleared the jump! (Rolled ${jumpRoll} vs ${jumpDiff})`);
+            movementRemaining--; // Cost 1 unit of movement to pass through
+            continue; 
+          } else {
+            addLog(`CRASH! ${racer.name} failed the jump. (Rolled ${jumpRoll} vs ${jumpDiff}). Penalty applied.`);
+            racer.isPenalized = true;
+            stoppedEarly = true;
+            break; // Stop immediately
+          }
+        }
+
+        // Normal movement
+        pos = nextPos;
+        movementRemaining--;
+      }
+
+      // Update state
+      racer.position = pos;
+      currentRacers[activeRacerIndex] = racer;
+
+      // Check Win Condition
+      if (pos >= TRACK_DATA.length) {
+        addLog(`🏁 ${racer.name} crosses the finish line!`);
+        setIsFinished(true);
+        setWinner(racer);
+      }
+
+      return currentRacers;
+    });
+
+    if (!isFinished) {
+      setActiveRacerIndex((prev) => (prev === 0 ? 1 : 0));
+    }
+  }, [activeRacerIndex, isFinished]);
+
+  return {
+    racers,
+    activeRacerIndex,
+    logs,
+    isFinished,
+    winner,
+    takeTurn,
+    trackData: TRACK_DATA
+  };
+}
+</file>
+
 <file path="src/hooks/useRunState.js">
 // src/hooks/useRunState.js
 import { useState, useCallback, useMemo } from 'react';
@@ -2211,14 +2700,16 @@ import { passiveScope } from '../data/passives';
 
 const rollD3 = () => 1 + Math.floor(Math.random() * 3);
 
-// We now accept the biome parameter to know which encounter tables to pull from
 export function useRunState(character, biome = 'swamp') {
   const [hp, setHp] = useState(character?.baseHealth ?? MAX_HP);
-  const [phase, setPhase] = useState('MAP'); // MAP | ENCOUNTER | VICTORY | DEFEAT | RETREAT
+  const [phase, setPhase] = useState('MAP'); 
   const [position, setPosition] = useState({ level: 0, zone: 'START', affix: null });
   const [visited, setVisited] = useState(() => new Set());
   const [foughtZones, setFoughtZones] = useState(() => new Set());
   const [inventory, setInventory] = useState({});
+  
+  // Track run-long penalties (like the Corpse Flower effect)
+  const [runAtkPenalty, setRunAtkPenalty] = useState(0);
 
   const [mapAffixes] = useState(() => {
     const affixes = {};
@@ -2244,6 +2735,12 @@ export function useRunState(character, biome = 'swamp') {
   const [usedLevelPassives, setUsedLevelPassives] = useState({});
 
   const movement = useMemo(() => getMovementOptions(position, visited), [position, visited]);
+
+  // Dynamically apply run-long penalties to the character object injected into encounters
+  const activeCharacter = useMemo(() => ({
+    ...character,
+    baseAttack: Math.max(0, character.baseAttack - runAtkPenalty)
+  }), [character, runAtkPenalty]);
 
   const updateHp = useCallback((newHp) => setHp(newHp), []);
 
@@ -2271,18 +2768,17 @@ export function useRunState(character, biome = 'swamp') {
     const type = getEncounterType(roll);
     if (type === 'BATTLE') {
       setFoughtZones((prev) => new Set(prev).add(nodeKey(position.level, position.zone)));
-      // Pass the biome alongside level and zone
       return { type, roll, enemy: spawnEnemy(biome, position.level, position.zone), level: position.level };
     }
     if (type === 'GATHER') {
       const res = rollGatherLoot(position.level, {
-        modifyQuantity: (ctx) => runPassiveHook(character, 'modifyGatherRoll', ctx),
+        modifyQuantity: (ctx) => runPassiveHook(activeCharacter, 'modifyGatherRoll', ctx),
         affix: position.affix,
       });
       return { type, roll, loot: res.loot, qtyRolls: res.qtyRolls, max: res.max, advantage: res.advantage, category: res.category, flowerId: res.flowerId };
     }
     return { type, roll, text: pickEvent() };
-  }, [position, character, biome]);
+  }, [position, activeCharacter, biome]);
 
   const commitRoll = useCallback((roll) => {
     if (rolls.includes(roll)) {
@@ -2304,7 +2800,7 @@ export function useRunState(character, biome = 'swamp') {
       levelFlags: usedLevelPassives[position.level] || {},
       hasFought: foughtZones.has(nodeKey(position.level, position.zone))
     };
-    rerollCtx = runPassiveHook(character, 'canRerollEncounter', rerollCtx);
+    rerollCtx = runPassiveHook(activeCharacter, 'canRerollEncounter', rerollCtx);
 
     if (rerollCtx.shouldReroll) {
       if (rerollCtx.consume) consumePassive(rerollCtx.consume);
@@ -2312,7 +2808,7 @@ export function useRunState(character, biome = 'swamp') {
       return;
     }
     commitRoll(roll);
-  }, [character, usedLevelPassives, position.level, foughtZones, consumePassive, commitRoll]);
+  }, [activeCharacter, usedLevelPassives, position.level, foughtZones, consumePassive, commitRoll]);
 
   const shivaReroll = useCallback(() => { commitRoll(rollD3()); }, [commitRoll]);
 
@@ -2323,7 +2819,12 @@ export function useRunState(character, biome = 'swamp') {
 
   const resolveEvent = useCallback(() => { setActiveEncounter(null); }, []);
 
-const resolveBattle = useCallback((result) => {
+  const resolveBattle = useCallback((result) => {
+    // Accumulate any permanent stat losses from the fight
+    if (result.accumulatedPenalty) {
+      setRunAtkPenalty((prev) => prev + result.accumulatedPenalty);
+    }
+
     if (result.escaped) {
       setHp(Math.min(MAX_HP, result.remainingHp));
       setActiveEncounter(null);
@@ -2331,17 +2832,22 @@ const resolveBattle = useCallback((result) => {
       setTimeout(() => explore(), 0); 
     } else if (result.victory) {
       let endCtx = { hp: result.remainingHp, maxHp: MAX_HP, victory: true };
-      endCtx = runPassiveHook(character, 'onFightEnd', endCtx);
+      endCtx = runPassiveHook(activeCharacter, 'onFightEnd', endCtx);
       setHp(Math.min(MAX_HP, endCtx.hp)); 
       addLoot(result.loot);
       
-      // If the death hook triggered a summon (Poacher), spawn a new battle instantly from 1A or 1B
       if (result.extraEncounter && activeEncounter) {
-        const ambushZone = Math.random() < 0.5 ? 'A' : 'B';
+        // Now exclusively pulls from Zone 1A (Swamp) or Zone 1C (Poison)
+        const ambushZone = Math.random() < 0.5 ? 'A' : 'C';
+        const ambushEnemy = spawnEnemy(biome, position.level, ambushZone);
+        
+        // CRITICAL FIX: Append a unique timestamp to force EncounterScreen to remount CombatView 
+        ambushEnemy.id = `${ambushEnemy.id}-ambush-${Date.now()}`;
+        
         setActiveEncounter({ 
           type: 'BATTLE', 
           roll: activeEncounter.roll, 
-          enemy: spawnEnemy(biome, position.level, ambushZone), 
+          enemy: ambushEnemy, 
           level: position.level 
         });
       } else {
@@ -2352,7 +2858,8 @@ const resolveBattle = useCallback((result) => {
       setActiveEncounter(null);
       setPhase('DEFEAT');
     }
-  }, [character, addLoot, explore, activeEncounter, biome, position]);
+  }, [activeCharacter, addLoot, explore, activeEncounter, biome, position]);
+
   const openMap = useCallback(() => {
     setActiveEncounter(null);
     setPhase('MAP');
@@ -2387,7 +2894,8 @@ const resolveBattle = useCallback((result) => {
   const retreat = useCallback(() => setPhase('RETREAT'), []);
 
   return {
-    character, hp, maxHp: MAX_HP, phase, position, visited, inventory, foughtZones,
+    character: activeCharacter, // Inject modified hero into the context
+    hp, maxHp: MAX_HP, phase, position, visited, inventory, foughtZones,
     rolls, activeEncounter, movement, mapAffixes,
     runPassives: usedRunPassives, consumePassive,
     explore, shivaReroll, acceptGather, resolveEvent, resolveBattle, openMap,
@@ -2439,6 +2947,169 @@ export function runEnemyHook(enemy, event, ctx) {
 // and under the /little-guys/ GitHub Pages sub-path.
 export const assetUrl = (path = '') =>
   `${import.meta.env.BASE_URL}${String(path).replace(/^\//, '')}`;
+</file>
+
+<file path="src/views/ActiveRace.jsx">
+import { assetUrl } from '../utils/assets';
+import { useRaceEngine } from '../hooks/useRaceEngine';
+import RaceBoard from '../components/RaceBoard';
+
+// -----------------------------------------------------------------------------
+// MATH & POSITION HELPERS
+// -----------------------------------------------------------------------------
+
+// Maps the 0-150 game position to X/Y coordinates on the SVG track
+// laneIndex 0 = Inner Lane, laneIndex 1 = Outer Lane
+function getRacerCoordinates(pos, laneIndex) {
+  const normalizedPos = Math.min(pos, 150);
+  const isInner = laneIndex === 0;
+
+  let x, y;
+
+  if (normalizedPos <= 50) {
+    // Top Straight (X goes 250 -> 950)
+    const progress = normalizedPos / 50;
+    x = 250 + progress * 700;
+    y = isInner ? 120 : 80;
+  } else if (normalizedPos <= 75) {
+    // Right Turn (Center 950, 250)
+    const progress = (normalizedPos - 50) / 25;
+    const angle = -Math.PI / 2 + (progress * Math.PI);
+    const r = isInner ? 130 : 170;
+    x = 950 + Math.cos(angle) * r;
+    y = 250 + Math.sin(angle) * r;
+  } else if (normalizedPos <= 125) {
+    // Bottom Straight (X goes 950 -> 250)
+    const progress = (normalizedPos - 75) / 50;
+    x = 950 - progress * 700;
+    y = isInner ? 380 : 420;
+  } else {
+    // Left Turn (Center 250, 250)
+    const progress = (normalizedPos - 125) / 25;
+    const angle = Math.PI / 2 + (progress * Math.PI);
+    const r = isInner ? 130 : 170;
+    x = 250 + Math.cos(angle) * r;
+    y = 250 + Math.sin(angle) * r;
+  }
+
+  // Offset by -25 to center the 50x50 foreignObject exactly on the line
+  return { x: x - 25, y: y - 25 };
+}
+
+// -----------------------------------------------------------------------------
+// UI COMPONENTS
+// -----------------------------------------------------------------------------
+
+function MiniRacerCard({ hero, laneColor, isActive, position }) {
+  return (
+    <div className={`flex flex-1 items-center gap-4 rounded-2xl border bg-stone-900/80 p-4 backdrop-blur-md transition-all duration-300 ${isActive ? `border-${laneColor.split('-')[1]}-500 shadow-[0_0_20px_rgba(0,0,0,0.5)] scale-105` : 'border-stone-800 opacity-60'}`}>
+      <div className={`relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 ${laneColor} bg-stone-950 shadow-inner`}>
+        <img src={assetUrl(hero.imagePath)} alt={hero.name} draggable={false} className="h-14 w-14 object-contain drop-shadow-md" />
+        {hero.isPenalized && (
+          <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-md">
+            !
+          </div>
+        )}
+      </div>
+      <div className="flex-1">
+        <div className="flex items-start justify-between">
+          <h3 className="mb-2 font-serif text-xl font-black text-white">{hero.name}</h3>
+          <span className="font-mono text-xs font-bold text-stone-400">POS: {position}</span>
+        </div>
+        <div className="flex gap-4">
+           <div className="flex flex-col"><span className="font-mono text-[9px] uppercase tracking-widest text-stone-500">Speed</span><span className="font-mono font-bold text-sky-400">{hero.racingStats.speed}</span></div>
+           <div className="flex flex-col"><span className="font-mono text-[9px] uppercase tracking-widest text-stone-500">Jump</span><span className="font-mono font-bold text-emerald-400">{hero.racingStats.jump}</span></div>
+           <div className="flex flex-col"><span className="font-mono text-[9px] uppercase tracking-widest text-stone-500">Turn</span><span className="font-mono font-bold text-rose-400">{hero.racingStats.turning}</span></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// MAIN RACE VIEW
+// -----------------------------------------------------------------------------
+
+export default function ActiveRace({ racers: initialRacers, onAbandon }) {
+  const { 
+    racers, 
+    activeRacerIndex, 
+    logs, 
+    isFinished, 
+    winner, 
+    takeTurn
+  } = useRaceEngine(initialRacers);
+
+  const [racer1, racer2] = racers;
+  const activeRacer = racers[activeRacerIndex];
+  const latestLog = logs[logs.length - 1];
+
+  const r1Coords = getRacerCoordinates(racer1.position, 0); // Lane 0
+  const r2Coords = getRacerCoordinates(racer2.position, 1); // Lane 1
+  
+  return (
+    <div className="flex min-h-screen flex-col bg-stone-950 text-stone-200">
+      <header className="flex items-center justify-between border-b border-stone-800 bg-stone-950/80 px-6 py-4 backdrop-blur-md">
+        <div>
+          <h1 className="font-serif text-2xl font-black text-rose-500">THE OVAL CIRCUIT</h1>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">Engine Engaged</p>
+        </div>
+        <button type="button" onClick={onAbandon} className="rounded-lg border border-rose-900/50 px-4 py-2 text-xs font-bold uppercase tracking-wider text-rose-400 transition hover:bg-rose-500/15 hover:text-rose-300">
+          Abandon Race
+        </button>
+      </header>
+
+      <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-stone-950 shadow-[inset_0_0_150px_rgba(0,0,0,1)]">
+        <RaceBoard 
+          racer1={racer1}
+          racer2={racer2}
+          r1Coords={r1Coords}
+          r2Coords={r2Coords}
+          activeRacerIndex={activeRacerIndex}
+          isFinished={isFinished}
+        />
+      </div>
+
+      <div className="z-20 border-t border-stone-800 bg-stone-950 px-6 py-6 shadow-[0_-15px_30px_rgba(0,0,0,0.6)]">
+         <div className="mx-auto flex max-w-6xl items-stretch gap-8">
+            <MiniRacerCard 
+              hero={racer1} 
+              laneColor="border-amber-400" 
+              isActive={activeRacerIndex === 0 && !isFinished}
+              position={racer1.position} 
+            />
+            
+            <div className="flex w-72 shrink-0 flex-col items-center justify-center rounded-2xl border-2 border-stone-800 bg-stone-900/50 p-4">
+              <span className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
+                {isFinished ? 'RACE OVER' : `${activeRacer.name}'s Turn`}
+              </span>
+              
+              <div className="mb-4 flex h-10 w-full items-center justify-center text-center">
+                <p className="text-xs font-medium italic text-stone-300 line-clamp-2">
+                  {isFinished ? `🏆 ${winner?.name} has won the race!` : latestLog}
+                </p>
+              </div>
+
+              <button 
+                onClick={takeTurn}
+                disabled={isFinished}
+                className="w-full rounded-lg bg-rose-600 py-3 font-black uppercase tracking-widest text-white shadow-lg transition hover:-translate-y-1 hover:bg-rose-500 hover:shadow-[0_0_20px_rgba(225,29,72,0.4)] disabled:opacity-30 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              >
+                {isFinished ? 'Finished' : 'Execute Turn'}
+              </button>
+            </div>
+
+            <MiniRacerCard 
+              hero={racer2} 
+              laneColor="border-rose-500" 
+              isActive={activeRacerIndex === 1 && !isFinished}
+              position={racer2.position}
+            />
+         </div>
+      </div>
+    </div>
+  );
+}
 </file>
 
 <file path="src/views/ActiveRun.jsx">
@@ -2688,6 +3359,207 @@ const run = useRunState(config.character, config.biome);  const ended = ['VICTOR
         .custom-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(120,113,108,0.4) transparent; }
         @media (prefers-reduced-motion: reduce) {
           .group-hover\\:animate-\\[shine_0\\.7s_ease-out\\], .animate-\\[nodePulse_2s_ease-in-out_infinite\\] { animation: none !important; }
+        }
+      `}} />
+    </div>
+  );
+}
+</file>
+
+<file path="src/views/RacingSetup.jsx">
+// src/views/RacingSetup.jsx
+import { useState } from 'react';
+import { HEROES } from '../data/heroes';
+import { assetUrl } from '../utils/assets';
+
+const TRACKS = [
+  { id: 'track_a', name: 'The Oval', desc: 'A standard dirt track with sweeping 25-unit turns and long straights.' },
+  { id: 'track_b', name: 'Sprint Circuit', desc: 'Heavy on straightaways, built entirely for max speed.' },
+  { id: 'track_c', name: 'Hazard Hollow', desc: 'Technical dirt track littered with consecutive 15-unit jumps.' },
+  { id: 'track_d', name: 'Serpent\'s Tail', desc: 'Sharp, erratic turning segments demanding high maneuverability.' },
+];
+
+function StatBar({ label, value, colorClass }) {
+  return (
+    <div className="mb-2.5 w-full">
+      <div className="mb-1 flex justify-between font-mono text-[10px] font-bold uppercase tracking-widest text-stone-400">
+        <span>{label}</span>
+        <span className="text-white">{value}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-900 shadow-inner">
+        <div
+          className={`h-full rounded-full transition-all duration-700 ease-out ${colorClass}`}
+          style={{ width: `${value}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default function RacingSetup({ onBack, onBeginRace }) {
+  const heroes = Object.values(HEROES);
+  
+  const [selectedRacers, setSelectedRacers] = useState([]);
+  const [selectedTrack, setSelectedTrack] = useState(null);
+
+  const toggleRacer = (heroId) => {
+    setSelectedRacers((prev) => {
+      if (prev.includes(heroId)) {
+        return prev.filter((id) => id !== heroId);
+      }
+      if (prev.length < 2) {
+        return [...prev, heroId];
+      }
+      return prev; // Block if 2 are already selected
+    });
+  };
+
+  const isReady = selectedRacers.length === 2 && selectedTrack !== null;
+
+  const handleStart = () => {
+    // Map the IDs back to the full Hero objects to pass to the race component
+    const racers = selectedRacers.map(id => HEROES[id]);
+    onBeginRace(racers, selectedTrack);
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl p-6 lg:p-10">
+      <header className="mb-10 flex flex-col gap-4 border-b border-stone-800 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="bg-gradient-to-br from-rose-300 via-rose-500 to-rose-700 bg-clip-text font-serif text-4xl font-black tracking-tighter text-transparent drop-shadow-[0_2px_10px_rgba(244,63,94,0.3)] lg:text-5xl">
+            RACING SETUP
+          </h1>
+          <p className="mt-1 font-mono text-xs uppercase tracking-widest text-stone-500">
+            Configure Your Heat
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-lg border border-stone-700 bg-stone-900/50 px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-stone-400 transition hover:bg-stone-800 hover:text-stone-200"
+        >
+          Back to Gateway
+        </button>
+      </header>
+
+      {/* Racer Selection */}
+      <section className="mb-12">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="font-mono text-sm font-bold uppercase tracking-[0.2em] text-stone-300">
+            1. Select Racers
+          </h2>
+          <span
+            className={`rounded bg-stone-900 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest shadow-inner ${
+              selectedRacers.length === 2 ? 'text-emerald-400 border border-emerald-500/30' : 'text-amber-400 border border-amber-500/30'
+            }`}
+          >
+            {selectedRacers.length} / 2 Selected
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          {heroes.map((hero) => {
+            const isSelected = selectedRacers.includes(hero.id);
+            const isDisabled = !isSelected && selectedRacers.length >= 2;
+
+            return (
+              <button
+                key={hero.id}
+                type="button"
+                onClick={() => toggleRacer(hero.id)}
+                disabled={isDisabled}
+                className={`group relative flex flex-col items-center overflow-hidden rounded-2xl border-2 p-5 text-left transition-all duration-300 ${
+                  isSelected
+                    ? 'border-amber-400 bg-stone-800/90 shadow-[0_0_30px_rgba(251,191,36,0.25)]'
+                    : isDisabled
+                    ? 'border-stone-800 bg-stone-900/40 opacity-40 cursor-not-allowed grayscale'
+                    : 'border-stone-700 bg-stone-900/60 hover:-translate-y-1 hover:border-stone-500 hover:bg-stone-800 hover:shadow-xl'
+                }`}
+              >
+                <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-stone-800/80 to-transparent opacity-50" />
+                
+                <img
+                  src={assetUrl(hero.imagePath)}
+                  alt={hero.name}
+                  draggable={false}
+                  className="relative z-10 mb-5 h-28 w-28 object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)] transition-transform duration-500 group-hover:scale-110"
+                />
+                
+                <h3 className={`relative z-10 mb-5 font-serif text-xl font-black ${isSelected ? 'text-amber-400' : 'text-white'}`}>
+                  {hero.name}
+                </h3>
+
+                <div className="relative z-10 w-full">
+                  <StatBar label="Speed" value={hero.racingStats.speed} colorClass="bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]" />
+                  <StatBar label="Jump" value={hero.racingStats.jump} colorClass="bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                  <StatBar label="Turning" value={hero.racingStats.turning} colorClass="bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.6)]" />
+                </div>
+
+                {isSelected && (
+                  <div className="absolute right-3 top-3 flex h-7 w-7 animate-[lootPop_0.3s_ease-out_both] items-center justify-center rounded-full bg-amber-400 text-stone-950 shadow-[0_0_15px_rgba(251,191,36,0.8)]">
+                    <span className="text-sm font-black leading-none">✓</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Track Selection */}
+      <section className="mb-12">
+        <h2 className="mb-6 font-mono text-sm font-bold uppercase tracking-[0.2em] text-stone-300">
+          2. Select Track Layout
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+          {TRACKS.map((track) => {
+            const isSelected = selectedTrack === track.id;
+            return (
+              <button
+                key={track.id}
+                type="button"
+                onClick={() => setSelectedTrack(track.id)}
+                className={`relative flex flex-col justify-center overflow-hidden rounded-2xl border-2 p-6 text-left transition-all duration-300 ${
+                  isSelected
+                    ? 'border-rose-500 bg-stone-800 shadow-[0_0_25px_rgba(244,63,94,0.3)] -translate-y-1'
+                    : 'border-stone-700 bg-stone-900/60 hover:-translate-y-1 hover:border-stone-500 hover:bg-stone-800'
+                }`}
+              >
+                <h3 className={`mb-2 font-serif text-xl font-black ${isSelected ? 'text-rose-400' : 'text-white'}`}>
+                  {track.name}
+                </h3>
+                <p className="text-xs leading-relaxed text-stone-400">
+                  {track.desc}
+                </p>
+                {isSelected && (
+                  <div className="absolute right-3 top-3 flex h-6 w-6 animate-[lootPop_0.3s_ease-out_both] items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.8)]">
+                    <span className="text-xs font-black leading-none">✓</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Initialization Action */}
+      <div className="flex justify-center pt-6 pb-20">
+        <button
+          type="button"
+          disabled={!isReady}
+          onClick={handleStart}
+          className="group relative overflow-hidden rounded-xl border border-rose-500/50 bg-rose-600 px-16 py-6 font-black uppercase tracking-widest text-white shadow-[0_0_25px_rgba(225,29,72,0.4)] transition-all enabled:hover:-translate-y-1 enabled:hover:bg-rose-500 enabled:hover:shadow-[0_0_45px_rgba(225,29,72,0.8)] disabled:cursor-not-allowed disabled:opacity-40 disabled:grayscale"
+        >
+          <span className="pointer-events-none absolute inset-0 -translate-x-full -skew-x-12 bg-white/20 transition-all duration-700 group-hover:animate-[shine_0.7s_ease-out]" />
+          <span className="relative text-lg">Initialize Race</span>
+        </button>
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes shine { to { transform: translateX(220%) skewX(-12deg); } }
+        @keyframes lootPop { 0% { opacity: 0; transform: scale(0.5) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+        @media (prefers-reduced-motion: reduce) { 
+           .group-hover\\:animate-\\[shine_0\\.7s_ease-out\\], .animate-\\[lootPop_0\\.3s_ease-out_both\\] { animation: none !important; } 
         }
       `}} />
     </div>
@@ -2956,6 +3828,118 @@ export default defineConfig([
     },
   },
 ])
+</file>
+
+<file path="game_description.md">
+# Little Guys: Game Design & Mechanics Document — v0.4
+
+## 1. Core Concept
+"Little Guys" is a companion web app played alongside a homebrew D&D campaign. Players draft a hero, pick a biome, and embark on roguelite "runs" through scaling zones to gather crafting resources and battle enemies. The app handles all randomness, stat math, meta-progression saving (`useMetaProgress.js`), and run state so the table can focus on play.
+
+## 2. The Gameplay Loop
+A run has five phases:
+
+1. **Setup:** Pick a Hero and a Biome.
+2. **Entry:** Enter Level 1. Roll a d3 to select the starting Zone (A/B/C).
+3. **Encounter Phase (the Zone Loop):**
+   - Roll a d3: **1 = Battle**, **2 = Gather**, **3 = Event**.
+   - Resolve the encounter. 
+   - Roll the d3 again within the same zone.
+   - **Unique roll** (different from any prior roll in this zone): trigger that encounter.
+   - **Duplicate roll** (a number already rolled in this zone): the zone is "cleared" → unlock the Movement Phase.
+4. **Movement Phase — exactly three choices (NO manual zone picking):**
+   - **A) Explore Current Level:** advance to a *random unexplored zone on the current level*.
+   - **B) Ascend:** advance to a *random unexplored zone on the next level up*.
+   - **C) Retreat:** end the run voluntarily, banking all gathered resources.
+   - The destination zone is **chosen by the system at random**.
+5. **Resolution:**
+   - **Win:** Reach and step onto the Level 6 goal node → Dedicated reward screen explicitly highlighting the overall haul and special prizes.
+   - **Retreat:** Voluntarily leave → Dedicated retreat screen explicitly highlighting secured resources.
+   - **Defeat:** Lose all 5 HP in combat → Run ends forcibly, gathered resources are lost, return to Main Menu.
+
+## 3. Map Architecture & Zone Affixes
+- Grid: **5 Levels (rows) × 3 Zones (cols: A/B/C)**, plus Start (Level 0) and Goal (Level 6).
+- Each zone has a biome-specific Type (e.g. Maiev Swamp → A: Swamp, B: Woods, C: Poison).
+- **Zone Affixes:** Zones can randomly spawn with an affix to alter risk/reward dynamics:
+  - **Peaceful:** Combat encounters are replaced by Events or Gather nodes, or enemy stats are significantly reduced.
+  - **Dangerous:** Enemy ATK/HP is buffed, but drop quantities are increased.
+  - **Fruitful:** Gather nodes yield double the standard base quantity.
+
+## 4. Combat & Stat Mechanics
+Lethal and tactical.
+- **Player Health (persistent, hard cap 5 HP):** carries between encounters. Visual hearts system.
+- **Player Attack:** 160–280 base.
+- **Enemy Health & Count:** Visual "Count" = `ceil(currentHP / hpPerCount)`; the pack visually shrinks as HP drops.
+  - **Explicit HP Display:** Alongside the visual count, the total exact Enemy HP is displayed numerically to aid player strategy.
+- **Enemy Attack:** high (≈80–120 at L1), scales **+20 ATK per level**.
+- **Resolution per exchange:** `roll = random() × ATK` for each side. Higher roll wins the exchange and deals **1 HP**. The losing margin is the **surplus** (`winnerRoll − loserRoll`), used by some passives.
+- **Combat Pacing:** Battle animations and log updates are spaced out to allow the user to read and process the clash, the numerical rolls, and the resulting damage/passive triggers before the next action becomes available.
+
+## 5. Roster, Passives & Companions
+Each hero has a small, well-defined passive set implemented via the Passive Engine. 
+
+| Hero | Affinity | HP | ATK | Passives |
+|------|----------|----|-----|----------|
+| **Gil** | Shadow + Earth | 5 | 200 | Ardenkin (Double slider on flowers), Battle Bloom |
+| **Marinska** | Shadow + Air | 5 | 260 | Take Flight |
+| **Tornado Werewolf** | Wind | 5 | 280 | Sweeping Wind |
+| **Crocagator** | Water | 5 | 160 | Thickhide |
+| **Shiva** | Earth | 5 | 220 | Looking for Trouble |
+
+**Passive Mechanics Updates:**
+- **Marinska (Take Flight):** When her passive triggers to save her from defeat, combat immediately ends. She then transitions into a new exploration roll, and the combat encounter for that specific zone is reset.
+- **Shiva (Looking for Trouble):** Triggers a maximum of once per level. If her exploration roll lands on anything other than a Battle, she unleashes a "Lion's Roar" and forces a reroll. **Exception:** This passive *does not trigger* if she has already fought a battle in that specific zone.
+
+## 6. Passive Engine (Scalable Architecture)
+Passives are **declarative and event-driven**. The engine dispatches events; each hook receives a `ctx` it may mutate and returns it.
+
+## 7. Biomes & Bestiary
+### Biome 1: Maiev Swamp (playable)
+- Zones — A: Swamp, B: Woods, C: Poison.
+- Enemies (L1 base; +1 HP & +20 ATK per level):
+  - Bog Bug (A): 3 HP | 80 ATK | hpPerCount 1
+  - Mire Mantis (B): 2 HP | 120 ATK | hpPerCount 1
+  - Salamandar (C): 2 HP | 100 ATK | hpPerCount 1
+  - Mire Man (C): 4 HP | 90 ATK | hpPerCount 2
+
+## 8. Gather Rules & Scaled Economy
+The gather phase utilizes a multi-step resolution process rather than a single static drop.
+
+**Gather Stage Mechanics:**
+1.  **Reward Reveal Roll:** The first roll determines the *category* of the reward based on the current level's drop table.
+2.  **Quantity Slider:** After the reward category is revealed, a dynamic slider (similar to the combat attack bar) appears to determine the exact quantity yielded from that item's specific range.
+3.  **Gil's Advantage:** When gathering Plants, Gil receives *two* quantity sliders and automatically keeps the higher result.
+
+**Per-Level Gather Tables:**
+* **Level 1:** 60% Plants | 20% Animal Feed | 20% Fish
+* **Level 2:** 60% Plants | 20% Animal Feed | 20% Fish
+* **Level 3:** 60% Plants | 20% Animal Feed | 20% DELC
+* **Level 4:** 60% Plants | 20% Sigil Dust | 20% DELC
+* **Level 5:** 20% Plants | 60% Sigil Dust | 20% Sigil
+
+## 9. End-of-Run Prizes (The Maiev Swamp)
+Upon successfully completing Level 5 and ascending to the Level 6 goal node in the Maiev Swamp, the player claims a grand prize rolled from the following distribution:
+* **50%:** Pet (Drawn from the existing Swamp bestiary table)
+* **25%:** Rune
+* **10%:** Grass Eevee
+* **10%:** Swamp Mount
+* **5%:** Blessed Item *(Represented strictly by a Chest Icon; no secondary Blessed Item table generation is created)*
+
+## 10. UI / UX Requirements
+- **Hero Select:** Height-locked; columns shrink, portrait uses `object-contain`.
+- **Portrait aura:** Dynamic gradients/pulses based on dual- and mono-affinity heroes.
+- **Exploration Wheel:** Visual rotation directly matches the resolved d3 logic.
+- **Combat View:**
+  - Active visual sliders demonstrating the ATK rolls.
+  - Pacing adjustments to allow events and logs to linger on screen.
+  - Explicit numeric Enemy HP indicator.
+- **End of Run Screens:** Victory and Retreat screens must feature a prominent, aggregated "Run Haul" section displaying exactly what resources are being added to the meta-progression bank, alongside any special unlocks.
+
+## 11. Architecture Notes
+- `useMetaProgress` — Owns localStorage persistence for run history, bestiary collection, and banked resources.
+- `useRunState` — Owns HP, inventory, position, zone loop, movement, resolution, per-run passive flags.
+- `useCombat` — Owns one fight; reports `{ victory, remainingHp, loot }`.
+- Passive Engine — `data/passives.js` + `lib/passiveEngine.js`.
 </file>
 
 <file path="index.html">
@@ -3318,20 +4302,105 @@ createRoot(document.getElementById('root')).render(
 </file>
 
 <file path="src/App.jsx">
+// src/App.jsx
 import { useState } from 'react';
 import MainMenu from './views/MainMenu';
 import RunSetup from './views/RunSetup';
 import ActiveRun from './views/ActiveRun';
 import StatsView from './views/StatsView';
+import RacingSetup from './views/RacingSetup';
+import ActiveRace from './views/ActiveRace'; // NEW IMPORT
 import { useMetaProgress } from './hooks/useMetaProgress';
 
 function App() {
+  const [appMode, setAppMode] = useState('gateway'); // gateway | adventure | racing
   const [currentView, setCurrentView] = useState('menu'); // menu | setup | run | stats
   const [runConfig, setRunConfig] = useState(null);
+  
+  // New state to hold the racers passed from RacingSetup
+  const [racingConfig, setRacingConfig] = useState(null); 
   const metaApi = useMetaProgress();
 
+  if (appMode === 'gateway') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-stone-950 p-6 font-sans text-stone-200 selection:bg-amber-500/30">
+        <div className="pointer-events-none absolute left-[-10%] top-[-20%] h-[60%] w-[60%] rounded-full bg-indigo-900/10 mix-blend-screen blur-[150px]" />
+        <div className="pointer-events-none absolute bottom-[-20%] right-[-10%] h-[70%] w-[70%] rounded-full bg-amber-900/10 mix-blend-screen blur-[150px]" />
+
+        <h1 className="z-10 mb-12 bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-center font-serif text-5xl font-black tracking-tighter text-transparent drop-shadow-[0_2px_10px_rgba(251,191,36,0.3)] md:text-7xl">
+          LITTLE GUYS
+        </h1>
+
+        <div className="z-10 flex w-full max-w-4xl flex-col gap-6 md:flex-row md:gap-8">
+          <button
+            onClick={() => {
+              setAppMode('adventure');
+              setCurrentView('menu');
+            }}
+            className="group relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-3xl border-2 border-stone-800 bg-stone-900/60 p-12 text-center shadow-xl backdrop-blur-sm transition-all hover:-translate-y-2 hover:border-amber-400 hover:bg-stone-800 hover:shadow-[0_0_40px_rgba(251,191,36,0.3)]"
+          >
+            <span className="pointer-events-none absolute inset-0 -translate-x-full -skew-x-12 bg-white/5 transition-all duration-700 group-hover:animate-[shine_0.7s_ease-out]" />
+            <span className="mb-4 text-6xl drop-shadow-lg transition-transform group-hover:scale-110">⚔️</span>
+            <h2 className="mb-3 font-serif text-3xl font-black text-white transition-colors group-hover:text-amber-400">
+              Adventure Mode
+            </h2>
+            <p className="text-sm leading-relaxed text-stone-400">
+              Draft a hero, explore the Mire, and battle deadly foes in the classic roguelite experience.
+            </p>
+          </button>
+
+          <button
+            onClick={() => {
+              setAppMode('racing');
+              setCurrentView('setup');
+            }}
+            className="group relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-3xl border-2 border-stone-800 bg-stone-900/60 p-12 text-center shadow-xl backdrop-blur-sm transition-all hover:-translate-y-2 hover:border-rose-500 hover:bg-stone-800 hover:shadow-[0_0_40px_rgba(244,63,94,0.3)]"
+          >
+            <span className="pointer-events-none absolute inset-0 -translate-x-full -skew-x-12 bg-white/5 transition-all duration-700 group-hover:animate-[shine_0.7s_ease-out]" />
+            <span className="mb-4 text-6xl drop-shadow-lg transition-transform group-hover:scale-110">🏁</span>
+            <h2 className="mb-3 font-serif text-3xl font-black text-white transition-colors group-hover:text-rose-500">
+              Racing Mini-Game
+            </h2>
+            <p className="text-sm leading-relaxed text-stone-400">
+              Hit the dirt track. Select your racers, navigate jumps and turns, and race to the finish line.
+            </p>
+          </button>
+        </div>
+
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes shine { to { transform: translateX(220%) skewX(-12deg); } }
+          @media (prefers-reduced-motion: reduce) { .group-hover\\:animate-\\[shine_0\\.7s_ease-out\\] { animation: none !important; } }
+        `}} />
+      </div>
+    );
+  }
+
+  if (appMode === 'racing') {
+    return (
+      <div className="min-h-screen bg-stone-950 font-sans text-stone-100">
+        {currentView === 'setup' && (
+          <RacingSetup 
+            onBack={() => setAppMode('gateway')} 
+            onBeginRace={(racers, track) => {
+              setRacingConfig({ racers, track });
+              setCurrentView('race');
+            }}
+          />
+        )}
+        {currentView === 'race' && racingConfig && (
+          <ActiveRace 
+            racers={racingConfig.racers} 
+            trackId={racingConfig.track}
+            onAbandon={() => setCurrentView('setup')}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Original Adventure Mode
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans">
+    <div className="min-h-screen bg-stone-900 font-sans text-stone-100">
       {currentView === 'menu' && (
         <MainMenu
           onStartRun={() => setCurrentView('setup')}
