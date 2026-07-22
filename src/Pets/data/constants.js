@@ -23,7 +23,7 @@ export const ROLE_META = {
   [ROLE.AFF_TANK]:     { label: 'Affinity Tank',  short: 'AFF DEF', hex: '#22d3ee', blurb: 'Blunts elemental damage and sustain.' },
   [ROLE.STUNNER]:      { label: 'Stunner',        short: 'STUN',    hex: '#c084fc', blurb: 'Control specialist. Builds Stun Counters on every hit.' },
   [ROLE.HEALER]:       { label: 'Healer',         short: 'HEAL',    hex: '#4ade80', blurb: 'Builds Heart Counters to top up the wounded.' },
-  [ROLE.SUPPORT]:      { label: 'Support',        short: 'SUPP',    hex: '#fbbf24', blurb: 'Generates Special charge even from the bench.' },
+  [ROLE.SUPPORT]:      { label: 'Support',        short: 'SUPP',    hex: '#fbbf24', blurb: 'Backline utility. Builds and relays Special charge from the bench.' },
 };
 
 export const ROLE_ORDER = [
@@ -102,8 +102,6 @@ export const RULES = {
   STUN_COUNTERS_TO_STUN: 3,
   /** Heart Counters a Healer needs before it heals its most wounded ally. */
   HEART_COUNTERS_TO_HEAL: 3,
-  /** Fraction of a rolled SPC die a benched Support contributes. */
-  BENCH_SUPPORT_SHARE: 0.5,
   /** Turns without any HP loss before Stagnation begins, then every N after. */
   STAGNATION_FIRST: 6,
   STAGNATION_REPEAT: 2,

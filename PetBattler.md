@@ -31,7 +31,7 @@ exists. See §13.
 |---|---|
 | **ATK** | The offensive die rolled to land strikes |
 | **DEF** | The defensive die rolled to block them |
-| **SPC** | The resource die rolled each turn to build the Special meter. Its *maximum* also decides initiative |
+| **SPC** | The resource die rolled each turn to build the Special meter. Its *maximum* also decides the opening turn |
 | **HP** | Flat hearts. No regeneration outside specific effects |
 
 All stats are die sizes, not values. A pet with ATK 40 rolls `1d40` when it
@@ -50,8 +50,8 @@ Any phase can end the turn early.
    and clears it. If this reduces the pet to 0 HP it faints and the turn ends.
 3. **Special charge.**
    - The active pet rolls its SPC die and adds the result to its meter.
-   - Every **benched Support** on the same team rolls its own SPC die and gains
-     half (rounded down).
+   - **Benched pets generate nothing by default.** Charge from the bench only
+     happens if a passive grants it, via the `benchCharge` hook.
    - Any pet whose passive reacts to allied charge gains resolve now (see
      *Lovey Dovey*). Bond shares do not chain — a share never triggers another share.
    - The meter caps at 100.
@@ -59,22 +59,23 @@ Any phase can end the turn early.
 5. **Action.** If the meter is at 100, the pet **must** cast its Special: the meter
    resets to 0 and the Special resolves. Otherwise it makes a standard attack.
 6. **Turn passes** to the opponent — unless a pet fainted, in which case the
-   replacement enters and initiative is recalculated (§6).
+   replacement enters and the turn goes to the side that lost it (§6).
 
 ### Standard attack
 
 The attacker rolls its ATK die, the defender rolls its DEF die. **The attack
-lands only if ATK is strictly greater than DEF — ties go to the defender.**
+lands if ATK is greater than or equal to DEF — ties go to the attacker.**
 A successful attack deals 1 damage plus whatever the attacker's role and
 passives add.
 
 ### Advantage and disadvantage
 
-Advantage rolls the die twice and keeps the higher; disadvantage rolls twice and
-keeps the lower. Sources stack numerically and are then **clamped to a single
-step**: two sources of advantage is still just advantage, and one advantage plus
-one disadvantage cancels to a flat roll. The arena shows every contributing
-reason under the roll.
+Every source of advantage and disadvantage is summed into a **net** value, and
+advantage cancels disadvantage one for one. The net decides how many dice are
+rolled: `1 + |net|`. A net of +1 rolls two dice and keeps the highest, +2 rolls
+three and keeps the highest, −2 rolls three and keeps the lowest, and a net of 0
+rolls one die. The arena shows every contributing reason under the roll, and
+labels each die KEPT or DROP.
 
 ---
 
@@ -116,7 +117,7 @@ is what separates the Attacker role from the Affinity Attacker role.
 | **Affinity Tank** | — | Advantage on DEF vs Affinity Attacker and Healer |
 | **Stunner** | Every successful attack also inflicts 1 Stun Counter | — |
 | **Healer** | Every successful attack builds 1 Heart Counter. At 3, heal the lowest-health ally (bench included) 1 heart and reset | — |
-| **Support** | — | While benched, rolls SPC each turn and banks half of it |
+| **Support** | — | Backline utility. Bench charge comes from a passive, not from the role itself — see *Backline Current* |
 
 The matchup web is deliberately rock-paper-scissors: physical Attackers punch
 through Affinity Tanks, Affinity Attackers punch through Tanks, and each Tank
@@ -124,6 +125,13 @@ type walls the attacker it was built for.
 
 > **Note:** No Healer pet exists in the current roster. The role is fully
 > implemented, so a Healer species can be added as pure data.
+>
+> **Bench charge is a passive, not a role.** Nothing generates Special charge
+> from the bench unless a passive says so. *Backline Current* (Felightning,
+> Lv.1) is the one that does, and it carries the original design intent one
+> step further: it banks half its own SPC roll **and relays a quarter of that
+> same roll to the active ally**, which is what makes parking a Support on the
+> bench a real tactical choice rather than a dead slot.
 
 ---
 
@@ -134,7 +142,7 @@ type walls the attacker it was built for.
 | **Burn** | Debuff | At the start of your turn, roll `1d6` per stack. Each `1` deals 2 damage (3 if the applier had *Scorching Flames*) and clears that stack. Potency is captured **when the Burn is applied**, so a Scorching Flames burn stays lethal regardless of who is burning |
 | **Rend** | Debuff | Max DEF halved. One stack is consumed each time you are attacked |
 | **Fade** | Buff | The next attack against you rolls at half Max ATK. One stack consumed per attack |
-| **Cursed** | Debuff | When you would deal damage, each stack has a 50% chance to null the damage entirely and be consumed. Stops at the first stack that triggers |
+| **Cursed** | Debuff | When you would deal damage, a flat **50% chance to null it entirely** — the number of stacks does not change the odds. Stacks are **duration**: one is lost at the end of your own turn, except a stack applied during that same turn, which is spared so a reactive application always gets a live turn |
 | **Paralyzed** | Debuff | 25% chance each turn to lose your action, checked after charge is generated. Does not expire |
 | **Stun Counter** | Debuff | At 3 counters, they convert into Stunned |
 | **Stunned** | Debuff | Skip your next turn. Consumed on use |
@@ -173,10 +181,12 @@ ATK = base + permanent modifiers + next-attack modifier
 ## 6. LINEUP & INITIATIVE
 
 - Before a match you lock the exact order of up to 5 pets. Slot 1 is the **Lead**.
-- **Initiative is decided by Max SPC** — the higher *die size*, not the current
-  meter. An exact tie is a coin flip.
-- Initiative is recalculated whenever a pet is knocked out and a replacement
-  takes the field, so a fast bench pet can seize the tempo.
+- **The opening turn is decided by Max SPC** — the higher *die size*, not the
+  current meter. An exact tie is a coin flip.
+- **After a knockout, the side that lost the pet always acts first.** Losing a
+  pet hands you the tempo, so a trade is never purely one-sided and the
+  replacement is not walked into immediately. This replaces the older rule of
+  recalculating Max SPC initiative on every switch-in.
 - A fainting pet **passes its accumulated Special charge** to whoever replaces it.
 - Benched pets keep any charge they generated, so a benched Support that never
   fights can still walk on with a full meter.
@@ -236,7 +246,7 @@ Every pet has a passive at Level 1 and a second at Level 5.
 | Necrodoodle | **Hex Claws** — standard attacks have a 1/6 chance to inflict Cursed | **Vengeful Curse** — 25% chance to Curse anyone who damages you |
 | Gnollbacabra | **Crippling Bite** — after damaging a target, their next attack rolls at −`1d6 × 10` Max ATK | **Bonecrusher** — anyone who damages you loses `1d2 × 10` Max DEF until their next turn |
 | Famine Wolf | **Crunch** — 25% chance to deal 1 extra damage | **Famine Feast** — after a knockout, gain +20 Max ATK permanently and 1 heart |
-| Felightning | **Baton Pass** — when knocked out, the next ally to enter gains 1 heart | **Overcharge** — inflicting Paralyzed also inflicts 3 Stun Counters |
+| Felightning | **Backline Current** — while benched, bank half your SPC roll and relay a quarter of it to the active ally · **Baton Pass** — when knocked out, the next ally to enter gains 1 heart | **Overcharge** — inflicting Paralyzed also inflicts 3 Stun Counters |
 | Bubble Trouble (Physical) | **Lovey Dovey** — gain 50% of any charge a bonded ally generates | **Surface Tension** — recover 25 charge when your Bubble Shield pops |
 | Bubble Trouble (Affinity) | **Lovey Dovey** — as above | **Undertow** — Damp you inflict also strips 10 Max ATK until the target's next attack |
 
@@ -303,32 +313,68 @@ change to that species' Special or passives is inherited automatically.
 
 ## 12. PRESENTATION & PLAYBACK
 
-The match is a recording, so the controls are transport controls:
+The match is a recording, so the controls are transport controls. They sit in a
+single strip at the top of the arena with the log docked to their right, keeping
+the entire lower two-thirds of the frame clear for the fight.
 
 | Control | Key | Behaviour |
 |---|---|---|
 | Play / Pause | `Space` | Freeze on any beat |
-| Speed | `1` `2` `4` `8` | Scales every hold *and* every CSS animation together, so the visuals never desync from the pacing |
-| Step | `→` | Advance exactly one beat, for reading a complicated exchange |
+| Speed | `1` `2` `4` `8` | Scales every hold *and* every CSS animation together, so visuals never desync from pacing |
+| Step | `→` | Advance exactly one beat |
 | Log | — | Scrollback of the last 16 events |
 | Skip | — | Jump to the result |
 | Exit | `Esc` | Back to setup |
 
-What is on screen:
+### Reading the fight
 
-- **Opening splash** — both leads and the full deployment order.
-- **HUD panels** — hearts, live Special meter, and the *current* ATK/DEF dice with
-  buff/nerf colouring, so a Rend or a Bubble Shield is visible as a number.
-- **Status chips** with stack counts and hover text pulled from the status registry.
-- **Opposed roll cards** above each pet showing every die rolled, which die was
-  discarded under advantage, the die size, and the *reasons* advantage applied
-  (`Role · FIRE < WATER`).
-- **Action ticker** under the turn banner narrating the current beat in plain language.
-- **Floating combat text**, hit sparks, a white flash on a killing blow, and camera
-  shake on any hit of 2 or more.
-- **Bench strips** showing entry order, remaining hearts, and live charge — a
-  benched Support visibly filling its meter is the whole point of the role.
-- **Result card** with the winner, turn count and surviving pets.
+- **Midday, no vignette.** The arena is lit flat and bright. Nothing in the
+  scene is dimmed to create focus, which means the pets can be the most
+  saturated thing on screen without competing against a darkened backdrop.
+- **The duel is downstage**, larger and lower in the frame than anything else.
+  The bench lines up against the back wall, the crowd is behind that.
+- **Hearts, name and charge** sit under each pet with no panel around them.
+- **Statuses live on each pet's outer flank** as large bordered icons with stack
+  counts, drawn *behind* the sprites so an attack animation sweeps in front of
+  them. They are big enough to read peripherally, so checking whether something
+  is burning never pulls your eye off the action.
+- **The bench carries no HUD at all.** Who enters next is communicated by
+  staging: closest to the fight, largest, brightest, with the rest queued behind.
+
+### The dice
+
+Every die the game rolls uses one visual grammar: a card over the pet it belongs
+to, one bar per die, bar height = roll ÷ scale.
+
+- **Opposed rolls share a single scale** (the larger of the two die sizes), so
+  the ATK and DEF bars are directly comparable and the taller bar simply wins.
+  Scaling each card to its own die made a 30-on-d40 look bigger than a
+  45-on-d50, which is backwards.
+- **Advantage shows both dice.** The kept die is labelled `KEPT`; the discarded
+  one is greyed, shrunk, struck through and labelled `DROP`. Exactly one die is
+  ever marked kept, including when both land on the same face.
+- **Status checks draw a dashed threshold line.** Three Burn stacks means three
+  bars; at or below the line means that stack ignited. Burn fires on a 1 of d6,
+  so "low bar wins" reads backwards without the line — with it, no rules
+  knowledge is needed. The same card covers the Paralyze and Cursed checks.
+
+### Motion policy
+
+Glows and flashes are reserved for impact: landing a hit, taking one, casting a
+Special, going down. Routine beats — charge ticks, status checks — get no sprite
+treatment at all, because a pet that lights up several times a turn reads as
+strobing rather than as emphasis. Neither pet is ever dimmed for not being the
+active one.
+
+Floating combat text owns its own lifetime: a number is queued when its event
+fires and removes itself on `animationend`, rather than being tied to the
+current event. Previously any event whose hold was shorter than the animation
+yanked its own number off screen mid-flight, which was the main source of
+jerkiness at higher speeds.
+
+Text is limited to things that carry a number or a state change the animation
+cannot show. "BLOCKED" is gone — the defender visibly dodges and the roll card
+already shows the miss, so the word was noise on top of two clearer signals.
 
 `prefers-reduced-motion` collapses every animation.
 
@@ -446,7 +492,7 @@ matches, level 1, no Natures):
 | **Shadow/Spirit chart corrected** | Now mutually advantaged, matching the written rule |
 | **Burn potency is captured on application** | Previously *Scorching Flames* was checked against the pet that was burning rather than the pet that applied the Burn, so the buff could apply to the wrong side |
 | **Felightning's Lv.1 passive** | Implemented as *Baton Pass* (the design's name) rather than the shipped *Get Away* |
-| **Initiative recalculates on every switch-in** | Matching the written rule, rather than alternating turns |
+| **Knockout priority** | The side that just lost a pet acts first. Replaces both the old alternating-turn behaviour and the v3.0 rule of recalculating Max SPC initiative on each switch-in |
 | **Level-ups documented as `1d4`** | See §10 |
 | **Draw condition** | A match that reaches the turn cap is now an explicit draw rather than undefined |
 

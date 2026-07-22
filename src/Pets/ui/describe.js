@@ -9,6 +9,7 @@ import { EV } from '../engine/events.js';
 import { statusDef } from '../data/index.js';
 
 export const TONE = {
+  charge: '#7dd3fc',
   damage: '#fb7185',
   heal: '#4ade80',
   block: '#34d399',
@@ -134,6 +135,14 @@ export function logFor(event) {
 
 /* ── FLOATING COMBAT TEXT ────────────────────────────────────────── */
 
+/**
+ * Floating combat text.
+ *
+ * Kept to things that carry a number or a state change you cannot read off the
+ * animation. "BLOCKED" is gone — the defender already visibly dodges and the
+ * roll card already shows the miss, so the word was pure noise on top of two
+ * clearer signals. Same for "RESISTED" and "FIRST STRIKE".
+ */
 export function floatsFor(event) {
   if (!event) return [];
   const at = (side, slot) => ({ side, slot: slot ?? event.state.lead[side] });
@@ -142,7 +151,7 @@ export function floatsFor(event) {
     case EV.IMPACT:
       return [{
         ...at(event.side, event.slot),
-        text: `-${event.amount}`,
+        text: `−${event.amount}`,
         tone: TONE.damage,
         size: event.amount >= 2 ? 'lg' : 'md',
       }];
@@ -150,22 +159,24 @@ export function floatsFor(event) {
     case EV.HEAL:
       return [{ ...at(event.side, event.slot), text: `+${event.amount}`, tone: TONE.heal, size: 'md' }];
 
-    case EV.BLOCK:
-      return [{ ...at(event.side, event.slot), text: 'BLOCKED', tone: TONE.block, size: 'sm' }];
+    case EV.SPC_GAIN: {
+      // The charge roll, shown as a number that drifts off the meter. Cheap
+      // enough to never hold up the timeline.
+      const main = event.entries?.find((e) => e.amount > 0);
+      if (!main) return [];
+      return [{ ...at(main.side, main.slot), text: `+${main.amount}`, tone: TONE.charge, size: 'chg' }];
+    }
 
     case EV.STATUS_APPLY:
       return [{
         ...at(event.side, event.slot),
-        text: event.name.toUpperCase() + (event.stacks > 1 ? ` x${event.stacks}` : ''),
+        text: event.name.toUpperCase() + (event.stacks > 1 ? ` ×${event.stacks}` : ''),
         tone: statusDef(event.status).tone,
         size: 'sm',
       }];
 
     case EV.SKIP:
       return [{ ...at(event.side, event.slot), text: event.text, tone: TONE.mute, size: 'md' }];
-
-    case EV.PASSIVE:
-      return [{ ...at(event.side, event.slot), text: event.text, tone: TONE[event.tone] ?? TONE.mute, size: 'sm' }];
 
     case EV.STAT_MOD:
       return [{
@@ -175,22 +186,8 @@ export function floatsFor(event) {
         size: 'sm',
       }];
 
-    case EV.STATUS_TICK:
-      return event.damage > 0
-        ? []
-        : [{ ...at(event.side, event.slot), text: 'RESISTED', tone: TONE.mute, size: 'sm' }];
-
     case EV.FAINT:
-      return [{ ...at(event.side, event.slot), text: 'K.O.', tone: TONE.mute, size: 'lg' }];
-
-    case EV.INITIATIVE:
-      return [{ ...at(event.side), text: 'FIRST STRIKE', tone: TONE.gold, size: 'sm' }];
-
-    case EV.STAGNATION:
-      return [
-        { ...at(0), text: 'STAGNATION', tone: TONE.curse, size: 'sm' },
-        { ...at(1), text: 'STAGNATION', tone: TONE.curse, size: 'sm' },
-      ];
+      return [{ ...at(event.side, event.slot), text: 'DOWN', tone: TONE.mute, size: 'lg' }];
 
     default:
       return [];
@@ -241,12 +238,15 @@ export function currentTurnNumber(timeline, index) {
 }
 
 /**
- * Per-side sprite animation state for the current event. Returns an object
- * keyed by side; anything absent falls back to the idle bob.
+ * Per-side sprite animation for the current event.
+ *
+ * Reserved for moments with weight: throwing an attack, being hit, casting,
+ * going down, walking on. Charge ticks and status checks deliberately return
+ * nothing — a pet lighting up every time it rolls its charge die made the whole
+ * match strobe, and the number that floats off the meter says it better.
  */
 export function animationsFor(event, action) {
   if (!event) return {};
-  const foe = (side) => (side === 0 ? 1 : 0);
 
   switch (event.type) {
     case EV.ACTION:
@@ -268,20 +268,6 @@ export function animationsFor(event, action) {
 
     case EV.SWITCH_IN:
       return { [event.side]: 'enter' };
-
-    case EV.SPC_GAIN: {
-      const main = event.entries?.[0];
-      return main && main.amount > 0 ? { [main.side]: 'charge' } : {};
-    }
-
-    case EV.STATUS_TICK:
-      return event.damage > 0 ? {} : { [event.side]: 'charge' };
-
-    case EV.HEAL:
-      return { [event.side]: 'charge' };
-
-    case EV.INITIATIVE:
-      return { [event.side]: 'charge', [foe(event.side)]: undefined };
 
     default:
       return {};

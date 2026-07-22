@@ -138,10 +138,10 @@ export const SPECIES = {
     typing: { offensive: ELEMENT.AIR, defensive: ELEMENT.AIR },
     base: { hp: 3, atk: 25, def: 30, spc: 40 },
     special: 'static_shock',
-    passives: ['baton_pass', 'overcharge'],
+    passives: ['backline_current', 'baton_pass', 'overcharge'],
     art: '/images/pets/Felightning.webp',
     facing: 'Right',
-    flavor: 'Charges the whole bench from the sidelines. Fragile on the field.',
+    flavor: 'Feeds the front line with charge from the sidelines. Fragile once it is out there itself.',
   },
 
   bubble_trouble_physical: {

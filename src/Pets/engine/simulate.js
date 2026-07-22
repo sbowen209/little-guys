@@ -20,7 +20,6 @@ import {
   ATTACK_ROLE_ADVANTAGE, DEFENSE_ROLE_ADVANTAGE, affinityVerdict, otherSide,
 } from '../data/index.js';
 
-const clampAdvantage = (n) => (n > 0 ? 1 : n < 0 ? -1 : 0);
 
 export function simulateBattle({ team1, team2, seed = randomSeed() }) {
   const rng = createRng(seed);
@@ -42,7 +41,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
   let turnCount = 0;
   let stagnationCounter = 0;
   let hpWatermark = 0;
-  let pendingInitiative = false;
+  let priorityOverride = null;
 
   const active = (side) => sides[side][lead[side]];
   const alive = (side) => sides[side].some((p) => !p.fainted);
@@ -50,6 +49,14 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
   const snapshot = () => ({
     lead: [lead[0], lead[1]],
     teams: [sides[0].map(snapshotPet), sides[1].map(snapshotPet)],
+    turn: turnCount,
+    // The stall clock, so the HUD can show how close Stagnation is without
+    // re-deriving the rule.
+    stagnation: {
+      counter: stagnationCounter,
+      threshold: stagThreshold(),
+      stacks: stacksOf(active(0), STATUS.STAGNATION),
+    },
   });
 
   const emit = (type, payload = {}) => {
@@ -145,6 +152,8 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     }
 
     const meta = {};
+    // Stamped so the end-of-turn decay can spare a curse applied this turn.
+    if (id === STATUS.CURSED) meta.appliedOn = turnCount;
     if (id === STATUS.BURN) {
       const potency = best(source, 'burnPotency', STATUS_DEFS[STATUS.BURN].defaultPotency);
       meta.potency = Math.max(target.statuses[id]?.potency ?? 0, potency);
@@ -280,7 +289,9 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       if (value) { adv += value; reasons.push(passive.name); }
     }
 
-    return { adv: clampAdvantage(adv), reasons };
+    // Net, not clamped: two sources of advantage roll three dice, and an
+    // advantage cancels a disadvantage outright.
+    return { adv, reasons };
   };
 
   const defenseAdvantage = (defender, attacker, isSpecial) => {
@@ -297,32 +308,38 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       if (value) { adv += value; reasons.push(passive.name); }
     }
 
-    return { adv: clampAdvantage(adv), reasons };
+    return { adv, reasons };
   };
 
+  /** One die, plus one more for every net step of advantage or disadvantage. */
   const rollWith = (max, advantage) => {
-    const rolls = [rng.die(max)];
-    if (advantage !== 0) rolls.push(rng.die(max));
+    const rolls = [];
+    for (let i = 0; i <= Math.abs(advantage); i += 1) rolls.push(rng.die(max));
     const kept = advantage > 0 ? Math.max(...rolls) : advantage < 0 ? Math.min(...rolls) : rolls[0];
     return { rolls, kept, max, advantage };
   };
 
   /* ── ACTIONS ───────────────────────────────────────────────────── */
 
+  /**
+   * Cursed is a flat 50% to null the damage, however many stacks are on you —
+   * stacks are duration, not probability, and are spent by the end-of-turn
+   * decay rather than by triggering.
+   */
   const curseCheck = (attacker, damage) => {
-    if (damage <= 0) return damage;
-    const stacks = stacksOf(attacker, STATUS.CURSED);
-    for (let i = 0; i < stacks; i += 1) {
-      if (rng.coin()) {
-        expireStatus(attacker, STATUS.CURSED, 1);
-        emit(EV.PASSIVE, {
-          side: attacker.side, slot: attacker.slot, label: 'Cursed',
-          text: 'CURSED', tone: 'curse',
-        });
-        return 0;
-      }
-    }
-    return damage;
+    if (damage <= 0 || !hasStatus(attacker, STATUS.CURSED)) return damage;
+
+    const roll = rng.die(2);
+    const nullified = roll === 1;
+
+    emit(EV.STATUS_TICK, {
+      side: attacker.side, slot: attacker.slot,
+      status: STATUS.CURSED, name: 'Cursed',
+      dieSize: 2, rolls: [roll], procValues: [1],
+      damage: 0, cleared: 0, nullified,
+    });
+
+    return nullified ? 0 : damage;
   };
 
   const applyPackets = (source, target, packets, label) => {
@@ -388,7 +405,8 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
 
     const atkRoll = rollWith(atkMax, atkAdv.adv);
     const defRoll = trueStrike ? null : rollWith(defMax, defAdv.adv);
-    const hit = trueStrike || atkRoll.kept > defRoll.kept;
+    // Ties go to the attacker.
+    const hit = trueStrike || atkRoll.kept >= defRoll.kept;
 
     emit(EV.ROLL, {
       side: attacker.side,
@@ -460,7 +478,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
 
     emit(EV.STATUS_TICK, {
       side: pet.side, slot: pet.slot, status: STATUS.BURN, name: 'Burn',
-      rolls, cleared, damage, potency,
+      dieSize: 6, rolls, procValues: [1], cleared, damage, potency,
     });
 
     if (cleared > 0) removeStacks(pet, STATUS.BURN, cleared);
@@ -471,11 +489,12 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     const pet = active(side);
     gainSpc(pet, rng.die(pet.stats.spc), 'turn');
 
+    // A benched pet generates nothing by virtue of its role. Charge from the
+    // bench has to come from a passive that says so.
     for (const benched of sides[side]) {
       if (benched === pet || benched.fainted) continue;
-      if (benched.species.role !== ROLE.SUPPORT) continue;
-      const share = Math.floor(rng.die(benched.stats.spc) * RULES.BENCH_SUPPORT_SHARE);
-      gainSpc(benched, share, 'support');
+      const granted = sum(benched, 'benchCharge', { active: pet });
+      if (granted > 0) gainSpc(benched, granted, 'passive');
     }
 
     flushSpc({ side, slot: pet.slot });
@@ -483,6 +502,12 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
 
   const totalHp = () =>
     sides[0].reduce((n, p) => n + p.hp, 0) + sides[1].reduce((n, p) => n + p.hp, 0);
+
+  /** 6 turns to the first stack, then every 2 once either side is stagnating. */
+  const stagThreshold = () => {
+    const engaged = hasStatus(active(0), STATUS.STAGNATION) || hasStatus(active(1), STATUS.STAGNATION);
+    return engaged ? RULES.STAGNATION_REPEAT : RULES.STAGNATION_FIRST;
+  };
 
   const tickStagnation = () => {
     const current = totalHp();
@@ -494,9 +519,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     hpWatermark = current;
     stagnationCounter += 1;
 
-    const engaged = hasStatus(active(0), STATUS.STAGNATION) || hasStatus(active(1), STATUS.STAGNATION);
-    const threshold = engaged ? RULES.STAGNATION_REPEAT : RULES.STAGNATION_FIRST;
-    if (stagnationCounter < threshold) return;
+    if (stagnationCounter < stagThreshold()) return;
 
     stagnationCounter = 0;
     addStacks(active(0), STATUS.STAGNATION, 1);
@@ -509,9 +532,25 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     for (const side of sides) for (const pet of side) delete pet.statuses[STATUS.STAGNATION];
   };
 
+  /**
+   * Cursed loses a stack at the end of the cursed pet's own turn. A stack
+   * applied during this very turn is spared, so a reactive passive such as
+   * Vengeful Curse — which lands on the attacker mid-attack — always gets a
+   * full turn of effect instead of expiring before it can do anything.
+   */
+  const decayCurse = (side) => {
+    const pet = active(side);
+    if (!pet || pet.fainted) return;
+    const entry = pet.statuses[STATUS.CURSED];
+    if (!entry) return;
+    if (entry.appliedOn === turnCount) return;
+    expireStatus(pet, STATUS.CURSED, 1);
+  };
+
   /** Handles every pet that hit 0 HP during the last step. */
   const processFaints = () => {
     let switched = false;
+    let avenging = null;
 
     for (let side = 0; side < 2; side += 1) {
       const pet = active(side);
@@ -540,9 +579,12 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       next.hasEntered = true;
       fire(next, 'onEnterField', { previous: pet });
       switched = true;
+      avenging = side;
     }
 
-    if (switched) pendingInitiative = true;
+    // The side that just lost a pet always acts first. If both went down on the
+    // same step, the one resolved last takes it.
+    if (avenging !== null) priorityOverride = avenging;
     hpWatermark = totalHp();
     return switched;
   };
@@ -576,9 +618,18 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
 
     generateCharge(side);
 
-    if (hasStatus(pet, STATUS.PARALYZED) && rng.die(RULES.PARALYZE_SKIP_IN) === 1) {
-      emit(EV.SKIP, { side, slot: pet.slot, reason: 'paralyzed', text: 'PARALYZED' });
-      return;
+    if (hasStatus(pet, STATUS.PARALYZED)) {
+      const roll = rng.die(RULES.PARALYZE_SKIP_IN);
+      const skipped = roll === 1;
+      emit(EV.STATUS_TICK, {
+        side, slot: pet.slot, status: STATUS.PARALYZED, name: 'Paralyzed',
+        dieSize: RULES.PARALYZE_SKIP_IN, rolls: [roll], procValues: [1],
+        damage: 0, cleared: 0, skipped,
+      });
+      if (skipped) {
+        emit(EV.SKIP, { side, slot: pet.slot, reason: 'paralyzed', text: 'PARALYZED' });
+        return;
+      }
     }
 
     const foe = active(otherSide(side));
@@ -610,15 +661,21 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     turnCount += 1;
 
     takeTurn(turnSide);
+    decayCurse(turnSide);
 
     const switched = processFaints();
     if (!alive(0) || !alive(1)) break;
 
     if (!switched) tickStagnation();
 
-    if (pendingInitiative) {
-      pendingInitiative = false;
-      turnSide = resolveInitiative('switch');
+    if (priorityOverride !== null) {
+      turnSide = priorityOverride;
+      priorityOverride = null;
+      emit(EV.INITIATIVE, {
+        side: turnSide, reason: 'avenge', tie: false,
+        spc: [active(0).stats.spc, active(1).stats.spc],
+        names: [active(0).name, active(1).name],
+      });
     } else {
       turnSide = otherSide(turnSide);
     }

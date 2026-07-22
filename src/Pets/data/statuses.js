@@ -62,7 +62,7 @@ export const STATUS_DEFS = {
     kind: 'debuff',
     stackable: true,
     tone: '#a855f7',
-    desc: 'When you would deal damage, each stack has a 50% chance to null it and be consumed.',
+    desc: 'When you would deal damage, a flat 50% chance to null it — no matter how many stacks you carry. Loses 1 stack at the end of your turn.',
   },
   [STATUS.PARALYZED]: {
     id: STATUS.PARALYZED,

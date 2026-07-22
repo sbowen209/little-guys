@@ -4,14 +4,17 @@ import { randomSeed } from '../engine/rng.js';
 import { EV } from '../engine/events.js';
 import { useBattlePlayback } from '../hooks/useBattlePlayback.js';
 import {
-  animationsFor, currentAction, currentTurnNumber, currentTurnSide,
-  floatsFor, isRanged, projectileStyle, tickerFor,
+  animationsFor, currentAction, currentTurnSide,
+  floatsFor, isRanged, projectileStyle,
 } from './describe.js';
 import ArenaBackdrop from './ArenaBackdrop.jsx';
 import PetSprite from './PetSprite.jsx';
-import CombatantPanel from './CombatantPanel.jsx';
-import BenchStrip from './BenchStrip.jsx';
-import RollCards from './RollCards.jsx';
+import PetNameplate from './PetNameplate.jsx';
+import StatusFlank from './StatusFlank.jsx';
+import PetVitals from './PetVitals.jsx';
+import BenchWings from './BenchWings.jsx';
+import TurnCounter from './TurnCounter.jsx';
+import { RollCards, CheckCard } from './RollCards.jsx';
 import ControlBar from './ControlBar.jsx';
 import BattleLog from './BattleLog.jsx';
 import { OpeningSplash, ResultOverlay } from './Overlays.jsx';
@@ -37,6 +40,36 @@ function useStageScale() {
   }, []);
 
   return [ref, scale];
+}
+
+/**
+ * Floating text with a lifetime of its own.
+ *
+ * Previously each float was rendered from the *current* event, so whenever an
+ * event's hold was shorter than the float's animation the number was yanked off
+ * screen mid-flight — the single biggest source of the jerkiness. Now a float is
+ * queued when its event fires and removes itself on `animationend`, so it always
+ * completes no matter how fast the timeline is running.
+ */
+function useFloatingFx(event) {
+  const [items, setItems] = useState([]);
+  const nextId = useRef(0);
+
+  useEffect(() => {
+    const spawned = floatsFor(event);
+    if (!spawned.length) return;
+    setItems((current) => [
+      // Hard cap so a stalled animation can never grow this without bound.
+      ...current.slice(-11),
+      ...spawned.map((float) => ({ ...float, key: nextId.current++ })),
+    ]);
+  }, [event]);
+
+  const retire = useCallback((key) => {
+    setItems((current) => current.filter((item) => item.key !== key));
+  }, []);
+
+  return [items, retire];
 }
 
 const isShakeEvent = (event) => event?.type === EV.IMPACT && (event.lethal || event.amount >= 2);
@@ -67,7 +100,9 @@ function BattleStage({ result, onRematch, onExit }) {
   const playback = useBattlePlayback(result);
   const { timeline, index, event, state, speed, paused, finished, progress } = playback;
 
-  /* Camera shake. Two identical CSS variants alternate so consecutive hits
+  const [floats, retireFloat] = useFloatingFx(event);
+
+  /* Camera shake. Two identical CSS variants alternate so back-to-back hits
      both restart the animation without remounting anything. */
   const [shake, setShake] = useState(null);
   const shakeFlip = useRef(false);
@@ -96,10 +131,7 @@ function BattleStage({ result, onRematch, onExit }) {
 
   const action = useMemo(() => (timeline ? currentAction(timeline, index) : null), [timeline, index]);
   const anims = useMemo(() => animationsFor(event, action), [event, action]);
-  const floats = useMemo(() => floatsFor(event), [event]);
-  const ticker = useMemo(() => tickerFor(event), [event]);
   const turnSide = useMemo(() => (timeline ? currentTurnSide(timeline, index) : null), [timeline, index]);
-  const turnNumber = useMemo(() => (timeline ? currentTurnNumber(timeline, index) : 1), [timeline, index]);
 
   if (!state) return null;
 
@@ -118,6 +150,25 @@ function BattleStage({ result, onRematch, onExit }) {
 
             {/* ── FIELD ──────────────────────────────────────────── */}
             <div className="pb-layer">
+              {/* Bench, against the wall. Scenery — no HUD. */}
+              {[0, 1].map((side) => (
+                <BenchWings
+                  key={`wing-${side}`}
+                  team={state.teams[side]}
+                  lead={state.lead[side]}
+                  side={side}
+                />
+              ))}
+
+              {/* Side rail: live dice outboard, status icons inboard of them,
+                  both behind the sprites so an attack sweeps in front. */}
+              {[0, 1].map((side) => (
+                <PetVitals key={`vitals-${side}`} pet={leads[side]} side={side} />
+              ))}
+              {[0, 1].map((side) => (
+                <StatusFlank key={`flank-${side}`} pet={leads[side]} side={side} />
+              ))}
+
               {[0, 1].map((side) => (
                 <PetSprite
                   key={`${side}-${leads[side].instanceId}`}
@@ -137,10 +188,7 @@ function BattleStage({ result, onRematch, onExit }) {
               )}
 
               {showSpark && (
-                <div
-                  key={`spark-${event.id}`}
-                  className={`pb-spark pb-spark--${event.side === 0 ? 'p1' : 'p2'}`}
-                />
+                <div key={`spark-${event.id}`} className={`pb-spark pb-spark--${event.side === 0 ? 'p1' : 'p2'}`} />
               )}
 
               {showFlash && <div key={`flash-${event.id}`} className="pb-flash" />}
@@ -149,7 +197,7 @@ function BattleStage({ result, onRematch, onExit }) {
             {/* ── UI ─────────────────────────────────────────────── */}
             <div className="pb-layer pb-layer--ui">
               {[0, 1].map((side) => (
-                <CombatantPanel
+                <PetNameplate
                   key={side}
                   pet={leads[side]}
                   side={side}
@@ -158,55 +206,40 @@ function BattleStage({ result, onRematch, onExit }) {
                 />
               ))}
 
-              <div className="pb-banner">
-                <div className="pb-banner__turn">
-                  <span
-                    className={`pb-dot ${turnSide === 0 ? 'pb-dot--on' : ''}`}
-                    style={turnSide === 0 ? { background: 'var(--p1)', boxShadow: '0 0 12px var(--p1)' } : undefined}
-                  />
-                  <span>Turn {turnNumber}</span>
-                  <span
-                    className={`pb-dot ${turnSide === 1 ? 'pb-dot--on' : ''}`}
-                    style={turnSide === 1 ? { background: 'var(--p2)', boxShadow: '0 0 12px var(--p2)' } : undefined}
-                  />
-                </div>
-                {ticker && (
-                  <div key={event.id} className={`pb-ticker ${ticker.hot ? 'pb-ticker--hot' : ''}`}>
-                    {ticker.text}
-                  </div>
-                )}
-              </div>
-
               {event.type === EV.ROLL && <RollCards event={event} />}
+              {event.type === EV.STATUS_TICK && event.rolls?.length > 0 && <CheckCard event={event} />}
 
-              {floats.map((float, i) => (
+              {floats.map((float) => (
                 <div
-                  key={`${event.id}-${i}`}
+                  key={float.key}
                   className={`pb-float pb-float--${float.side === 0 ? 'p1' : 'p2'} pb-float--${float.size}`}
-                  style={{ color: float.tone, textShadow: `0 0 26px ${float.tone}, 0 6px 18px rgba(0,0,0,0.9)` }}
+                  style={{ color: float.tone }}
+                  onAnimationEnd={() => retireFloat(float.key)}
                 >
                   {float.text}
                 </div>
               ))}
 
-              {[0, 1].map((side) => (
-                <BenchStrip key={side} team={state.teams[side]} lead={state.lead[side]} side={side} />
-              ))}
 
-              {showLog && <BattleLog timeline={timeline} index={index} />}
+              <TurnCounter turn={state.turn} stagnation={state.stagnation} />
 
-              <ControlBar
-                speed={speed}
-                paused={paused}
-                showLog={showLog}
-                progress={progress}
-                onSpeed={setSpeed}
-                onTogglePause={togglePaused}
-                onStep={step}
-                onSkip={skipToEnd}
-                onToggleLog={toggleLog}
-                onExit={onExit}
-              />
+              {/* Transport at the top, log docked to its right. */}
+              <div className="pb-topbar">
+                <ControlBar
+                  speed={speed}
+                  paused={paused}
+                  showLog={showLog}
+                  onSpeed={setSpeed}
+                  onTogglePause={togglePaused}
+                  onStep={step}
+                  onSkip={skipToEnd}
+                  onToggleLog={toggleLog}
+                  onExit={onExit}
+                />
+                {showLog && <BattleLog timeline={timeline} index={index} />}
+              </div>
+
+              <div className="pb-scrub"><i style={{ width: `${Math.round(progress * 100)}%` }} /></div>
 
               {event.type === EV.BATTLE_START && <OpeningSplash state={state} />}
 

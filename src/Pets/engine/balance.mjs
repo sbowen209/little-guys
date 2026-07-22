@@ -95,6 +95,89 @@ check('Bubble Shield does not heal', !JSON.stringify(ABILITIES.bubble_shield).in
 check('Every species has a registered Special', ids.every((id) => ABILITIES[SPECIES[id].special]));
 check('No match exceeded the turn cap', longest < RULES.MAX_TURNS);
 
+// After a knockout, the side that lost the pet must act first.
+{
+  let checked = 0;
+  let wrong = 0;
+  for (let i = 0; i < 60; i += 1) {
+    const { timeline } = simulateBattle({
+      team1: randomTeam(RULES.TEAM_SIZE, 'p'),
+      team2: randomTeam(RULES.TEAM_SIZE, 'q'),
+    });
+    for (let e = 0; e < timeline.length; e += 1) {
+      if (timeline[e].type !== 'faint') continue;
+      const downed = timeline[e].side;
+      // Only meaningful if that side still had someone to send out.
+      const switched = timeline.slice(e + 1, e + 6).find((ev) => ev.type === 'switch_in' && ev.side === downed);
+      if (!switched) continue;
+      const nextTurn = timeline.slice(e + 1).find((ev) => ev.type === 'turn_start');
+      if (!nextTurn) continue;
+      checked += 1;
+      if (nextTurn.side !== downed) wrong += 1;
+    }
+  }
+  check(`Knockout hands the next turn to the downed side (${checked} switch-ins)`, checked > 0 && wrong === 0);
+}
+
+// Rule sweep over a big sample of real matches.
+{
+  let benchGains = 0;      // charge gained by a pet that was not the active one
+  let tieLosses = 0;       // an ATK == DEF roll that failed to land
+  let diceMismatch = 0;    // dice rolled != 1 + |net advantage|
+  let curseMultiRoll = 0;  // a Cursed check that rolled more than one die
+  let stagBlocked = 0;     // Thick Fur refusing Stagnation
+  let sawStagnation = 0;
+  let sawTie = 0;
+  let sawStacked = 0;      // a roll with |advantage| > 1
+
+  for (let i = 0; i < 120; i += 1) {
+    const { timeline } = simulateBattle({
+      team1: randomTeam(RULES.TEAM_SIZE, 'g'),
+      team2: randomTeam(RULES.TEAM_SIZE, 'h'),
+    });
+
+    for (const e of timeline) {
+      if (e.type === 'spc_gain') {
+        for (const entry of e.entries ?? []) {
+          const lead = e.state.lead[entry.side];
+          const fromPassive = entry.source === 'bond' || entry.source === 'passive';
+          const onSwitch = entry.source === 'inherit';
+          if (entry.slot !== lead && entry.amount > 0 && !fromPassive && !onSwitch) benchGains += 1;
+        }
+      }
+
+      if (e.type === 'roll') {
+        for (const side of [e.attacker, e.defender]) {
+          if (!side || side.trueStrike) continue;
+          if (side.rolls.length !== 1 + Math.abs(side.advantage)) diceMismatch += 1;
+          if (Math.abs(side.advantage) > 1) sawStacked += 1;
+        }
+        if (!e.trueStrike && e.attacker.kept === e.defender.kept) {
+          sawTie += 1;
+          if (!e.hit) tieLosses += 1;
+        }
+      }
+
+      if (e.type === 'status_tick' && e.status === 'cursed' && e.rolls.length !== 1) curseMultiRoll += 1;
+
+      if (e.type === 'stagnation') sawStagnation += 1;
+      // Thick Fur belongs to Scruffy; if it ever refused Stagnation the engine
+      // would emit an IMMUNE passive event on a stagnation beat.
+      if (e.type === 'passive' && e.label === 'Thick Fur' && e.text === 'IMMUNE') {
+        const prior = timeline[timeline.indexOf(e) - 1];
+        if (prior?.type === 'stagnation') stagBlocked += 1;
+      }
+    }
+  }
+
+  check('Benched charge only ever comes from a passive', benchGains === 0);
+  check(`Ties on ATK vs DEF go to the attacker (${sawTie} ties seen)`, sawTie > 0 && tieLosses === 0);
+  check(`Dice rolled always equal 1 + |net advantage| (${sawStacked} stacked rolls)`, diceMismatch === 0);
+  check('Advantage stacks beyond a single step', sawStacked > 0);
+  check('Cursed rolls exactly one die regardless of stacks', curseMultiRoll === 0);
+  check(`Thick Fur does not refuse Stagnation (${sawStagnation} applications)`, stagBlocked === 0);
+}
+
 // A seed must reproduce a match exactly.
 const teamA = randomTeam(3, 'r');
 const teamB = randomTeam(3, 's');

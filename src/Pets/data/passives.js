@@ -8,8 +8,10 @@
  * Every hook receives a single object. `ctx` is the battle context (see
  * engine/simulate.js) and `self` is the pet that owns the passive.
  *
- *   attackAdvantage  ({ ctx, self, target, isSpecial })  -> number  (summed, then clamped)
- *   defenseAdvantage ({ ctx, self, attacker, isSpecial }) -> number
+ *   attackAdvantage  ({ ctx, self, target, isSpecial })  -> number  summed with every
+ *                      other source; the NET decides how many dice are rolled, and
+ *                      advantage and disadvantage cancel one another out
+ *   defenseAdvantage ({ ctx, self, attacker, isSpecial }) -> number  (as above)
  *   damageBonus      ({ ctx, self, target, damage })      -> number (added to damage)
  *   burnPotency      ({ ctx, self })                      -> number (damage of Burns THIS pet applies)
  *   onAttackHit      ({ ctx, self, target, isSpecial })   -- landed an attack
@@ -20,6 +22,8 @@
  *   onKO             ({ ctx, self, target })              -- self knocked target out
  *   onFaint          ({ ctx, self, killer })              -- self was knocked out
  *   onAllySpcGain    ({ ctx, self, ally, amount })        -- an ally generated Special charge
+ *   benchCharge      ({ ctx, self, active })      -> number  Special charge gained while benched.
+ *                                                  Nothing generates bench charge without this.
  *
  * Flags (not hooks):
  *   debuffImmune  true -> the pet cannot receive statuses of kind 'debuff'
@@ -227,6 +231,28 @@ export const PASSIVES = {
   },
 
   /* ── Felightning ──────────────────────────────────────────────── */
+  backline_current: {
+    id: 'backline_current',
+    name: 'Backline Current',
+    level: 1,
+    desc: 'While benched, roll your SPC die each turn and bank half of it. Your active ally is fed a quarter of the same roll.',
+    hooks: {
+      /**
+       * Bench charge is no longer a property of the Support role — nothing
+       * generates it without a passive — so this carries the original design
+       * intent instead. Feeding the active ally is what makes parking a Support
+       * on the bench a real tactical choice rather than a dead slot.
+       */
+      benchCharge: ({ ctx, self, active }) => {
+        const roll = ctx.rng.die(self.stats.spc);
+        const relay = Math.floor(roll * 0.25);
+        if (relay > 0 && active && !active.fainted) {
+          ctx.gainSpc(active, relay, 'passive');
+        }
+        return Math.floor(roll * 0.5);
+      },
+    },
+  },
   baton_pass: {
     id: 'baton_pass',
     name: 'Baton Pass',
