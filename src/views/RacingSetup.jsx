@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { assetUrl } from '../utils/assets';
 import { MOUNTS, PLAYER_PRESETS, AVAILABLE_PASSIVES, generateOpponent } from '../data/mounts';
+import RaceHistory from './RaceHistory';
 
 export default function RacingSetup({ onBack, onBeginRace }) {
   const [view, setView] = useState('menu'); 
@@ -14,8 +15,23 @@ export default function RacingSetup({ onBack, onBeginRace }) {
   const [activeTab, setActiveTab] = useState(0);
   const [circuitOpponents, setCircuitOpponents] = useState([]);
   const [heats, setHeats] = useState([]);
+  const [isPractice, setIsPractice] = useState(false);
   
-  const [playerProfiles, setPlayerProfiles] = useState(JSON.parse(JSON.stringify(PLAYER_PRESETS)));
+  const [playerProfiles, setPlayerProfiles] = useState(() => {
+    const saved = localStorage.getItem('playerProfiles');
+    if (saved) {
+       const parsed = JSON.parse(saved);
+       return parsed.map(p => ({
+          ...p,
+          passives: p.passives || (p.passive && p.passive !== 'none' ? [p.passive] : [])
+       }));
+    }
+    return JSON.parse(JSON.stringify(PLAYER_PRESETS));
+  });
+
+  useEffect(() => {
+    localStorage.setItem('playerProfiles', JSON.stringify(playerProfiles));
+  }, [playerProfiles]);
 
   useEffect(() => {
     if (view === 'circuit') {
@@ -24,7 +40,8 @@ export default function RacingSetup({ onBack, onBeginRace }) {
   }, [view]);
 
   const generateCircuitPool = (len) => {
-    const opps = Array.from({length: len}, (_, i) => generateOpponent(i));
+    const aceIndex = Math.floor(Math.random() * len);
+    const opps = Array.from({length: len}, (_, i) => generateOpponent(i, i === aceIndex));
     setCircuitOpponents(opps);
     setHeats(Array.from({length: len}, (_, i) => ({
       index: i,
@@ -89,6 +106,7 @@ export default function RacingSetup({ onBack, onBeginRace }) {
         facing: skin.facing,
         racingStats: quickStats[id],
         passives: quickPassives[id] || [],
+        level: 1,
         laps: 1
       };
     });
@@ -110,17 +128,21 @@ export default function RacingSetup({ onBack, onBeginRace }) {
       const oS = 2.0 + (opp.level * 1.5) + oW;
 
       const probPlayer = pS / (pS + oS);
-      const payoutMult = 1 / probPlayer;
+      // Payout nerf: House takes an effective 10% edge 
+      const payoutMult = (1 / probPlayer) * 0.9;
       const potential = heat.wager * payoutMult;
 
       const playerRacer = {
         isPlayer: true,
+        presetId: activeProfile.id,
+        isPractice: isPractice,
         id: `player_heat_${heat.index}`,
         name: activeProfile.label.split(' (')[0], 
         imagePath: skin.imagePath,
         facing: skin.facing,
         racingStats: { speed: activeProfile.speed, jump: activeProfile.jump, turning: activeProfile.turning },
         passives: activeProfile.passives,
+        level: activeProfile.level,
         laps: 1,
         wagerInfo: { amount: heat.wager, potential }
       };
@@ -133,6 +155,7 @@ export default function RacingSetup({ onBack, onBeginRace }) {
         facing: opp.facing,
         racingStats: opp.stats,
         passives: opp.passives,
+        level: opp.level,
         laps: 1
       };
 
@@ -145,7 +168,7 @@ export default function RacingSetup({ onBack, onBeginRace }) {
   if (view === 'menu') {
     return (
       <div className="flex min-h-screen w-full items-center justify-center bg-[#0d1317] font-sans text-stone-200">
-        <div className="flex flex-col gap-8 text-center max-w-4xl w-full px-6">
+        <div className="flex flex-col gap-8 text-center max-w-5xl w-full px-6">
           <h1 className="font-serif text-6xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)] tracking-tighter">
             THE GATEWAY
           </h1>
@@ -159,10 +182,22 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                <p className="mt-4 text-stone-400 font-mono text-sm leading-relaxed">Compete against generated AI opponents across a multi-heat circuit. Draft from your customized roster profiles, review odds, and place your bets.</p>
             </button>
           </div>
+          
+          <div className="mt-4 flex justify-center">
+            <button onClick={() => setView('history')} className="group relative w-full md:w-2/3 rounded-3xl border-2 border-stone-700 bg-stone-900 px-10 py-6 hover:border-emerald-500 hover:bg-stone-800 transition-all hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(16,185,129,0.2)]">
+               <h2 className="font-serif text-3xl font-black text-white group-hover:text-emerald-400">Race History</h2>
+               <p className="mt-2 text-stone-400 font-mono text-sm leading-relaxed">Review past wager resolutions and completed circuit ledgers.</p>
+            </button>
+          </div>
+
           <button onClick={onBack} className="mt-8 text-stone-500 font-mono text-sm uppercase tracking-widest hover:text-white transition">Return to Home</button>
         </div>
       </div>
     );
+  }
+
+  if (view === 'history') {
+    return <RaceHistory onBack={() => setView('menu')} />;
   }
 
   if (view === 'quick') {
@@ -296,7 +331,10 @@ export default function RacingSetup({ onBack, onBeginRace }) {
       const oW = (selectedOpp.wins + selectedOpp.losses) > 0 ? selectedOpp.wins / (selectedOpp.wins + selectedOpp.losses) : 0;
       const oS = 2.0 + (selectedOpp.level * 1.5) + oW;
       const probPlayer = pS / (pS + oS);
-      oddsData = { prob: probPlayer, mult: 1 / probPlayer, potential: currentHeat.wager * (1 / probPlayer) };
+      
+      // Payout nerf logic implemented here
+      const nerfedMult = (1 / probPlayer) * 0.9;
+      oddsData = { prob: probPlayer, mult: nerfedMult, potential: currentHeat.wager * nerfedMult };
     }
 
     return (
@@ -307,13 +345,21 @@ export default function RacingSetup({ onBack, onBeginRace }) {
             <div>
               <h1 className="font-serif text-5xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]">WAGERING CIRCUIT</h1>
               <div className="flex items-center gap-4 mt-3">
-                <span className="font-mono text-xs uppercase text-stone-500 tracking-widest">Total Heats:</span>
-                <div className="flex gap-2">
-                  {[1, 2, 3].map(num => (
-                    <button key={num} onClick={() => handleCircuitLengthChange(num)} className={`w-8 h-8 rounded border flex items-center justify-center font-black ${circuitLength === num ? 'bg-amber-500 text-stone-950 border-amber-400' : 'bg-stone-900 border-stone-700 text-stone-400 hover:bg-stone-800'}`}>
-                      {num}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4">
+                  <span className="font-mono text-xs uppercase text-stone-500 tracking-widest">Total Heats:</span>
+                  <div className="flex gap-2">
+                    {[1, 2, 3].map(num => (
+                      <button key={num} onClick={() => handleCircuitLengthChange(num)} className={`w-8 h-8 rounded border flex items-center justify-center font-black ${circuitLength === num ? 'bg-amber-500 text-stone-950 border-amber-400' : 'bg-stone-900 border-stone-700 text-stone-400 hover:bg-stone-800'}`}>
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 ml-6 border-l border-stone-800 pl-6">
+                  <span className="font-mono text-xs uppercase text-stone-500 tracking-widest">Practice Mode:</span>
+                  <button onClick={() => setIsPractice(!isPractice)} className={`w-12 h-6 rounded-full p-1 transition-colors ${isPractice ? 'bg-amber-500' : 'bg-stone-800'}`}>
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${isPractice ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -359,12 +405,23 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                 </div>
 
                 <div className="flex flex-col gap-4">
-                  <div className="bg-stone-950 border border-stone-800 rounded-lg p-3 text-center flex flex-col items-center">
-                    <span className="text-[10px] font-mono text-stone-500 uppercase mb-2">Record</span>
-                    <div className="flex items-center gap-2">
-                       <input type="number" min="0" value={activeProfile.wins} onChange={(e)=>handleProfileEdit(activeProfile.id, 'wins', parseInt(e.target.value)||0)} className="w-12 bg-transparent text-emerald-400 font-mono font-bold text-center border-b border-stone-700 focus:border-emerald-400 outline-none"/>
-                       <span className="text-stone-500">-</span>
-                       <input type="number" min="0" value={activeProfile.losses} onChange={(e)=>handleProfileEdit(activeProfile.id, 'losses', parseInt(e.target.value)||0)} className="w-12 bg-transparent text-rose-400 font-mono font-bold text-center border-b border-stone-700 focus:border-rose-400 outline-none"/>
+                  <div className="flex gap-4">
+                    <div className="flex-1 bg-stone-950 border border-stone-800 rounded-lg p-3 text-center flex flex-col items-center justify-center">
+                      <span className="text-[10px] font-mono text-stone-500 uppercase mb-2">Record</span>
+                      <div className="flex items-center gap-2">
+                         <input type="number" min="0" value={activeProfile.wins} onChange={(e)=>handleProfileEdit(activeProfile.id, 'wins', parseInt(e.target.value)||0)} className="w-10 bg-transparent text-emerald-400 font-mono font-bold text-center border-b border-stone-700 focus:border-emerald-400 outline-none"/>
+                         <span className="text-stone-500">-</span>
+                         <input type="number" min="0" value={activeProfile.losses} onChange={(e)=>handleProfileEdit(activeProfile.id, 'losses', parseInt(e.target.value)||0)} className="w-10 bg-transparent text-rose-400 font-mono font-bold text-center border-b border-stone-700 focus:border-rose-400 outline-none"/>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 bg-stone-950 border border-stone-800 rounded-lg p-3 text-center flex flex-col items-center justify-center">
+                      <span className="text-[10px] font-mono text-stone-500 uppercase mb-2">Level</span>
+                      <div className="flex items-center gap-2">
+                         <button onClick={() => handleProfileEdit(activeProfile.id, 'level', Math.max(1, activeProfile.level - 1))} className="w-6 h-6 rounded bg-stone-900 border border-stone-700 text-stone-400 hover:text-amber-400 hover:border-amber-400 font-bold flex items-center justify-center transition-colors">-</button>
+                         <span className="w-8 text-center text-white font-serif font-black text-xl">{activeProfile.level}</span>
+                         <button onClick={() => handleProfileEdit(activeProfile.id, 'level', activeProfile.level + 1)} className="w-6 h-6 rounded bg-stone-900 border border-stone-700 text-stone-400 hover:text-amber-400 hover:border-amber-400 font-bold flex items-center justify-center transition-colors">+</button>
+                      </div>
                     </div>
                   </div>
                   
@@ -434,9 +491,10 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                           <h3 className={`font-serif text-lg font-black ${isSelectedForThisHeat ? 'text-emerald-400' : 'text-white'}`}>{opp.name}</h3>
                           {isAssignedElsewhere && <span className="text-[8px] font-mono font-bold uppercase tracking-widest bg-stone-800 border border-stone-600 text-stone-400 px-2 py-0.5 rounded">Heat {assignedHeatIndex + 1}</span>}
                         </div>
-                        <div className="flex gap-3 text-[10px] font-mono mt-1">
-                          <span className="text-stone-400 border border-stone-700 rounded px-1.5 bg-stone-950">Lvl {opp.level}</span>
-                          <span className="text-emerald-400">{opp.wins} W</span>
+                        <div className="flex gap-2 text-[10px] font-mono mt-1 items-center">
+                          <span className={`border border-stone-700 rounded px-1.5 bg-stone-950 font-bold ${opp.level >= 6 ? 'text-amber-400' : 'text-stone-400'}`}>Lvl {opp.level}</span>
+                          {opp.isAce && <span className="text-[8px] font-mono font-bold uppercase tracking-widest bg-amber-900/30 text-amber-400 px-1 rounded border border-amber-800">ACE</span>}
+                          <span className="text-emerald-400 ml-1">{opp.wins} W</span>
                           <span className="text-rose-400">{opp.losses} L</span>
                         </div>
                         <div className="flex justify-between mt-1.5 items-end">

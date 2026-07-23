@@ -315,6 +315,8 @@
 .pb-hp.is-full { fill: #e5344b; filter: drop-shadow(0 2px 3px rgba(90, 20, 20, 0.5)); }
 .pb-hp.is-empty { fill: rgba(60, 45, 30, 0.28); stroke: rgba(255, 255, 255, 0.65); stroke-width: 1.5px; transform: scale(0.72); }
 .pb-hp.is-lost { animation: pbHeartBreak calc(0.5s / var(--sp)) cubic-bezier(0.3, 0, 0.3, 1) both; }
+/* Hearts beyond Max HP, granted by an overhealing effect. */
+.pb-hp.is-over.is-full { fill: #f9a825; filter: drop-shadow(0 0 5px rgba(249, 168, 37, 0.85)); }
 @keyframes pbHeartBreak {
   0%   { transform: scale(1.45); fill: #fff; }
   100% { transform: scale(0.72); }

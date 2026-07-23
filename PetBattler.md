@@ -1,6 +1,6 @@
 # PET BATTLER
 
-**Game Design Document v3.0 — Deterministic Autobattler**
+**Game Design Document v3.1 — Deterministic Autobattler**
 
 This document describes the game *as implemented* in `src/Pets/`. Where v2.0 of
 the design differed from what shipped, this version follows the code and calls
@@ -50,8 +50,9 @@ Any phase can end the turn early.
    and clears it. If this reduces the pet to 0 HP it faints and the turn ends.
 3. **Special charge.**
    - The active pet rolls its SPC die and adds the result to its meter.
-   - **Benched pets generate nothing by default.** Charge from the bench only
-     happens if a passive grants it, via the `benchCharge` hook.
+   - **Every benched Support** rolls its own SPC die and banks half of it (§4).
+     Other benched pets generate nothing unless a passive grants it via the
+     `benchCharge` hook.
    - Any pet whose passive reacts to allied charge gains resolve now (see
      *Lovey Dovey*). Bond shares do not chain — a share never triggers another share.
    - The meter caps at 100.
@@ -117,21 +118,31 @@ is what separates the Attacker role from the Affinity Attacker role.
 | **Affinity Tank** | — | Advantage on DEF vs Affinity Attacker and Healer |
 | **Stunner** | Every successful attack also inflicts 1 Stun Counter | — |
 | **Healer** | Every successful attack builds 1 Heart Counter. At 3, heal the lowest-health ally (bench included) 1 heart and reset | — |
-| **Support** | — | Backline utility. Bench charge comes from a passive, not from the role itself — see *Backline Current* |
+| **Support** | — | **Generates Special charge from the bench.** Each of its team's turns, a benched Support rolls its own SPC die and banks half the result |
 
 The matchup web is deliberately rock-paper-scissors: physical Attackers punch
 through Affinity Tanks, Affinity Attackers punch through Tanks, and each Tank
 type walls the attacker it was built for.
 
-> **Note:** No Healer pet exists in the current roster. The role is fully
-> implemented, so a Healer species can be added as pure data.
->
-> **Bench charge is a passive, not a role.** Nothing generates Special charge
-> from the bench unless a passive says so. *Backline Current* (Felightning,
-> Lv.1) is the one that does, and it carries the original design intent one
-> step further: it banks half its own SPC roll **and relays a quarter of that
-> same roll to the active ally**, which is what makes parking a Support on the
-> bench a real tactical choice rather than a dead slot.
+### ⚠ PROTECTED RULE — Support bench charge
+
+**A benched Support generates Special charge. This belongs to the role itself,
+not to any passive, and must not be moved behind one.**
+
+Each turn its team takes, every benched Support rolls its own SPC die and banks
+`floor(roll × 0.5)` — tuned by `RULES.SUPPORT_BENCH_SHARE` in
+`data/constants.js`. It is the single reason to hold a Support in reserve rather
+than lead with it; without it a benched Support is a dead roster slot and the
+role has no identity. A passive may still *add* bench charge on top through the
+`benchCharge` hook, but the baseline is the role's.
+
+This was once implemented as a passive (*Backline Current*) and was lost when
+that passive was retired in a balance pass. It is now guarded by an assertion in
+`balance.mjs` — *"A benched Support still generates Special charge"* — which
+fails loudly if the behaviour disappears again. **Do not remove that assertion.**
+
+> **Note:** Mosstiff is the roster's only Healer. The role was fully implemented
+> long before a species used it, which is what made adding one pure data.
 
 ---
 
@@ -139,17 +150,38 @@ type walls the attacker it was built for.
 
 | Status | Kind | Effect |
 |---|---|---|
-| **Burn** | Debuff | At the start of your turn, roll `1d6` per stack. Each `1` deals 2 damage (3 if the applier had *Scorching Flames*) and clears that stack. Potency is captured **when the Burn is applied**, so a Scorching Flames burn stays lethal regardless of who is burning |
-| **Rend** | Debuff | Max DEF halved. One stack is consumed each time you are attacked |
+| **Burn** | Debuff | At the start of your turn, roll `1d6` per stack. Each `1` deals 2 damage (3 if the applier had *Hell Flames*) and clears that stack. Potency is captured **when the Burn is applied**, so a Hell Flames burn stays lethal regardless of who is burning |
+| **Rend** | Debuff | Max DEF halved. **Does not wear off** — only a cleanse removes it |
 | **Fade** | Buff | The next attack against you rolls at half Max ATK. One stack consumed per attack |
 | **Cursed** | Debuff | When you would deal damage, a flat **50% chance to null it entirely** — the number of stacks does not change the odds. Stacks are **duration**: one is lost at the end of your own turn, except a stack applied during that same turn, which is spared so a reactive application always gets a live turn |
 | **Paralyzed** | Debuff | 25% chance each turn to lose your action, checked after charge is generated. Does not expire |
 | **Stun Counter** | Debuff | At 3 counters, they convert into Stunned |
 | **Stunned** | Debuff | Skip your next turn. Consumed on use |
 | **Bubble Shield** | Buff | Max DEF doubled. Pops the moment you take *any* damage, leaving the attacker Damp |
-| **Damp** | Debuff | Max DEF reduced by 10 per stack. Washed off when you take damage |
+| **Damp** | Debuff | Max DEF reduced by 5 per stack. Washed off when you take damage |
 | **Shed** | Buff | Max ATK increased by your Max DEF. One stack consumed per attack |
+| **Zaptap** | Buff | When an attack damages you, deal 1 back to the attacker. One stack consumed |
+| **Advantage** | Buff | Your next attack rolls with Advantage. One stack consumed per attack |
+| **Disadvantage** | Debuff | Your next attack rolls with Disadvantage. One stack consumed per attack |
+| **Energized** | Buff | Roll your SPC die twice and bank both. One stack consumed per roll |
+| **Stunt** | Debuff | You cannot cast your Special, even at a full meter. One stack falls off at the end of your turn |
+| **Powerful** | Buff | Your attacks deal at least 2 damage. One stack consumed per attack that **lands** |
+| **Bleed** | Debuff | At the start of your turn, roll `1d4` per stack. Each `1` deals 1 damage and clears that stack |
 | **Stagnation** | System | See §8 |
+
+A stack of **Advantage** is one attack's worth, not one step of magnitude:
+holding three means three advantaged attacks, never a single roll of four dice.
+
+### Declarative statuses
+
+Everything from Zaptap down is **pure data**. `data/statuses.js` documents a set
+of behaviour fields (`attackAdvantage`, `damageFloor`, `blocksSpecial`, `thorns`,
+`spcDice`, `spcMult`, `tickOnTurn`) and expiry fields (`consumeOnAttack`,
+`consumeOnHit`, `consumeOnDamaged`, `consumeOnSpcRoll`, `expireAtTurnEnd`,
+`clearOnExit`) which the engine honours generically. A new status that fits them
+needs no engine change at all. The statuses above Zaptap predate this and are
+still resolved bespoke, because their interactions with the defence pipeline and
+with Burn potency do not reduce to those fields.
 
 **Debuff immunity** (*Thick Fur*) refuses everything marked Debuff and nothing
 marked Buff.
@@ -159,7 +191,7 @@ marked Buff.
 Order matters and is applied exactly once, in `engine/combatant.js`:
 
 ```
-DEF = base + flat modifiers − (10 × Damp stacks)
+DEF = base + flat modifiers − (5 × Damp stacks)
     → ×2 if Bubble Shield
     → ÷2 if Rend
     → ×(1 − 0.1 × Stagnation stacks), floored at 10% of base
@@ -199,18 +231,34 @@ Every Special costs the full 100 meter and fires automatically. Specials are
 either **Attack** (roll ATK vs DEF as normal, with the listed scaling) or
 **Effect** (no roll, resolves immediately).
 
+Names marked *(provisional)* are placeholders awaiting a real one; they carry
+`provisional: true` in `data/abilities.js`. The mechanics are authored.
+
 | Pet | Special | Type | Effect |
 |---|---|---|---|
-| Hellhound (Affinity) | **Hellfire Bolt** | Attack, **200% ATK** | 2 Fire damage and inflicts Burn |
+| Hellhound (Affinity) | **Hellfire Bolt** | Attack, **200% ATK** | 1 Fire damage and inflicts Burn |
 | Hellhound (Physical) | **Rending Bite** | Attack, **200% ATK** | 2 damage and 3 stacks of Rend |
 | Emboar | **Heat Up** | Effect | Inflicts Burn on the opposing pet |
-| Terror Terrier | **Terrorize** | Attack, 200% ATK | 1 damage and 3 Stun Counters. Gains 2 stacks of Fade **whether or not the strike lands** |
+| Terror Terrier | **Terrorize** | Attack, 200% ATK | 1 damage and 3 Stun Counters. Gains 3 stacks of Fade **whether or not the strike lands** |
 | Scruffy | **Shed** | Effect | 5 stacks of Shed (Max DEF added to Max ATK for 5 attacks) |
 | Necrodoodle | **Doom Curse** | Attack, 200% ATK | 2 damage and 3 stacks of Cursed |
 | Gnollbacabra | **Sunder** | Effect | Permanently strips `1d3 × 10` Max ATK. If the target's Max ATK reaches 0 they are destroyed outright |
 | Famine Wolf | **Ravenous Bite** | Attack, 200% ATK | 2 damage, then immediately regain 50 charge |
-| Felightning | **Static Shock** | Attack, **TRUESTRIKE** | Cannot be blocked. 1 damage and inflicts Paralyzed |
+| Felightning | **Static Shock** | Attack, **300% ATK** | 2 damage and inflicts Paralyzed |
 | Bubble Trouble (both) | **Bubble Shield** | Effect | Doubles Max DEF until you take damage; the attacker who pops it is left Damp |
+| Cerberus | **Twin Fangs** *(provisional)* | Attack, 200% ATK | 2 damage and 3 stacks of Advantage |
+| Milk Truck | **Milk** | Effect | Washes off every debuff and grants +10 Max ATK permanently |
+| Balto | **Sled Charge** *(provisional)* | Attack, 200% ATK | 1 damage, then a benched enemy is dragged onto the field and takes 1 damage too |
+| Watthog | **Chain Shock** | Attack, 200% ATK | 1 damage, plus 1 to two different benched enemies |
+| Quillbacabra | **Quill Guard** *(provisional)* | Effect | 3 stacks of Zaptap |
+| Punchadillo | **Haymaker** *(provisional)* | Attack, 200% ATK | 1 damage and 1 Stun Counter on **every** enemy, bench included — the active one also takes the Stunner role's counter, so it gets 2 |
+| Mosstiff | **Verdant Bloom** *(provisional)* | Effect | A random benched ally gains 1 heart, which **can exceed its Max HP** |
+| Bellybummer | **Lifesteal** | Attack, 200% ATK | 1 damage healed back to you, then roll SPC and siphon that much charge off the target |
+| Mega Chicken | **Talon Flurry** *(provisional)* | Attack, 200% ATK | 2 damage and 2 stacks of Bleed |
+
+**Overhealing.** A few effects carry a pet above its Max HP. Those hearts are
+real, survive on the bench, and come onto the field with the pet; the nameplate
+grows extra gold hearts rather than hiding the surplus.
 
 ---
 
@@ -220,6 +268,11 @@ Two high-DEF tanks with low ATK can theoretically trade blocked attacks forever.
 Stagnation is the pressure valve.
 
 - A counter increments every turn in which **total HP across both teams does not fall**.
+- **Any turn on which total HP falls resets the counter to zero.** A fight that
+  is trading damage never stagnates, however long it runs. (A bug shipped in an
+  earlier build rebased the comparison every turn, so the counter was blind to
+  damage and Stagnation arrived on a fixed schedule in every match. The rule is
+  now guarded by the assertion *"The stagnation clock resets whenever HP falls"*.)
 - After **6** such turns, both active pets gain 1 stack of Stagnation.
 - Once anyone has a stack, the interval tightens to **every 2 turns**.
 - Each stack cuts Max DEF by 10%, down to a floor of 10% of the original die.
@@ -238,17 +291,25 @@ Every pet has a passive at Level 1 and a second at Level 5.
 
 | Pet | Lv.1 | Lv.5 |
 |---|---|---|
-| Hellhound (Affinity) | **Hellfire** — standard attacks have a 1/6 chance to inflict Burn | **Scorching Flames** — Burns this pet applies deal 3 instead of 2 |
-| Hellhound (Physical) | **Intimidating** — advantage against enemies at full health | **Smells Weakness** — advantage against enemies at 2 hearts or fewer |
+| Hellhound (Affinity) | **Hellfire** — standard attacks have a 1/6 chance to inflict Burn | **Hell Flames** — Burns this pet applies deal 1 extra damage |
+| Hellhound (Physical) | **Intimidating** — advantage **and +1 damage** against enemies at full health | **Relentless** — advantage against enemies at 2 hearts or fewer |
 | Emboar | **Flame Aura** — 25% chance to Burn anyone who damages you with an attack | **Afterburn** — Burn the opposing pet when you are knocked out |
 | Terror Terrier | **Ghostly Blur** — gain 1 Fade after taking damage | **Capitalize** — when you Stun someone they take 1 damage and lose all charge |
 | Scruffy | **Thick Fur** — immune to debuffs | **Scruffy** — advantage on DEF at 2 hearts or fewer |
-| Necrodoodle | **Hex Claws** — standard attacks have a 1/6 chance to inflict Cursed | **Vengeful Curse** — 25% chance to Curse anyone who damages you |
+| Necrodoodle | **Hex Claws** — standard attacks have a 25% chance to inflict Cursed | **Vengeful Curse** — 25% chance to Curse anyone who damages you |
 | Gnollbacabra | **Crippling Bite** — after damaging a target, their next attack rolls at −`1d6 × 10` Max ATK | **Bonecrusher** — anyone who damages you loses `1d2 × 10` Max DEF until their next turn |
-| Famine Wolf | **Crunch** — 25% chance to deal 1 extra damage | **Famine Feast** — after a knockout, gain +20 Max ATK permanently and 1 heart |
-| Felightning | **Backline Current** — while benched, bank half your SPC roll and relay a quarter of it to the active ally · **Baton Pass** — when knocked out, the next ally to enter gains 1 heart | **Overcharge** — inflicting Paralyzed also inflicts 3 Stun Counters |
-| Bubble Trouble (Physical) | **Lovey Dovey** — gain 50% of any charge a bonded ally generates | **Surface Tension** — recover 25 charge when your Bubble Shield pops |
-| Bubble Trouble (Affinity) | **Lovey Dovey** — as above | **Undertow** — Damp you inflict also strips 10 Max ATK until the target's next attack |
+| Famine Wolf | **Crunch** — 25% chance to deal 1 extra damage | **Famine Feast** — after a knockout, gain +40 Max ATK permanently |
+| Felightning | **Get Away** — when knocked out, Paralyze a random benched enemy | **Parting Charge** *(prov.)* — when knocked out, bank 50 charge, which passes to your replacement |
+| Bubble Trouble (both) | **Lovey Dovey** — gain 50% of any charge a bonded ally generates | **Surface Tension** — recover 25 charge when your Bubble Shield pops |
+| Cerberus | **Twin Bite** — after an attack is blocked, gain 1 Advantage | **Press the Advantage** *(prov.)* — attacking with net Advantage, 50% chance of +1 damage |
+| Milk Truck | **Milk Shake** — gain 1 Energized when damaged | **Second Stomach** *(prov.)* — 1-in-10 chance to recover 1 heart at the start of your turn |
+| Balto | **First Light** *(prov.)* — **double Max ATK** and advantage on any roll during either pet's first turn on the field | **Fresh Legs** *(prov.)* — gain 1 Powerful when you start the match or enter from the bench |
+| Watthog | **Chain Lightning** — dealing damage has a 1/6 chance to arc 1 damage to a benched enemy | **Supercharge** — gain 15 charge whenever you are damaged |
+| Quillbacabra | **Bristleback** *(prov.)* — 25% chance to deal 1 back when damaged | **Parting Quills** *(prov.)* — when knocked out, the killer takes 1 damage plus 1 per Zaptap stack you held |
+| Punchadillo | **Concussive Blast** *(prov.)* — landing a third Stun Counter on the active enemy gives every benched enemy 1 Stun Counter | **Rolling Guard** *(prov.)* — landing a third Stun Counter grants 2 Fade |
+| Mosstiff | **Photosynthesis** *(prov.)* — 25% chance to gain a Heart Counter at the start of your turn, without attacking | **Last Bloom** *(prov.)* — when knocked out, the next ally to enter gains 1 heart, which can exceed its Max HP |
+| Bellybummer | **Spooked** — when you take the field, the opposing pet gains 5 Disadvantage | **Stage Fright** *(prov.)* — when you take the field, the opposing pet gains 5 Stunt |
+| Mega Chicken | **Raking Spurs** *(prov.)* — successful attacks have a 50% chance to inflict Bleed | **Death Throes** *(prov.)* — when knocked out, the opposing pet gains 1 Rend |
 
 **Bonding** is a species tag rather than a hard-coded pairing: both Bubble
 Troubles carry `bond: 'bubble'`, and *Lovey Dovey* fires for any ally sharing
@@ -293,9 +354,9 @@ change to that species' Special or passives is inherited automatically.
 | Preset | Base | Lv | Natures (ATK/DEF/SPC) | Final line |
 |---|---|---|---|---|
 | **Fluffy** | Hellhound (Affinity) | 5 | +4 / −4 / +4 | HP 5 · d45 / d36 / d43 |
-| **Fuzzy** | Hellhound (Physical) | 5 | +11 / +8 / −3 | HP 5 · d69 / d40 / d29 |
-| **Lovey** | Bubble Trouble (Physical) | 1 | +1 / +1 / +3 | HP 8 · d21 / d51 / d33 |
-| **Dovey** | Bubble Trouble (Affinity) | 1 | −3 / −7 / −8 | HP 8 · d17 / d43 / d22 |
+| **Fuzzy** | Hellhound (Physical) | 5 | +11 / +8 / −3 | HP 5 · d69 / d42 / d29 |
+| **Lovey** | Bubble Trouble (Physical) | 2 | +1 / +1 / +3 | HP 8 · d22 / d51 / d33 |
+| **Dovey** | Bubble Trouble (Affinity) | 2 | −3 / −7 / −8 | HP 8 · d20 / d43 / d22 |
 
 ---
 
@@ -453,12 +514,33 @@ everything bespoke lives behind the registries. Adding a pet is:
    reach for the `onResolve` escape hatch for genuinely odd behaviour like Sunder.
 3. If it needs new passives, add them to `data/passives.js` against the hook
    points listed at the top of that file.
-4. If it needs a new status, add it to `data/statuses.js`.
+4. If it needs a new status, add it to `data/statuses.js` using the declarative
+   behaviour fields (§5). Give it an **icon no other status uses** — an
+   assertion enforces this, because statuses are read peripherally off each
+   pet's flank.
 5. Add the species to `data/species.js` with a **new, permanent id**.
-6. Run `node src/Pets/engine/balance.mjs` and check the win-rate table.
+6. Run `node src/Pets/engine/balance.mjs` at level 1 **and** level 5.
 
-No engine file and no UI file needs to change. Ids are permanent because saved
-rosters reference them — never rename or reuse one; retire it and add a new one.
+Ids are permanent because saved rosters reference them — never rename or reuse
+one; retire it and add a new one. Presets derive from a species, so they inherit
+its Special and passives automatically — and are checked by the harness too, so
+a retired passive that only a preset still referenced cannot slip through.
+
+### Hooks a passive can use
+
+`attackAdvantage`, `defenseAdvantage`, `attackScale`, `damageBonus`,
+`burnPotency`, `onTurnStart`, `onAttackHit`, `onAttackMiss`, `onDealDamage`,
+`onDamaged`, `onStatusApplied`, `onStunned`, `onShieldPopped`, `onEnterField`,
+`onKO`, `onFaint`, `onAllySpcGain`, `benchCharge`. The authoritative list, with
+signatures, is the comment block at the top of `data/passives.js`.
+
+`ctx` additionally offers `activeFoeOf`, `alliesOf`, `benchedFoesOf`,
+`benchedAlliesOf`, `addHeartCounters`, `clearDebuffs`, `forceSwitch`,
+`queueSwitchInBonus`, and `heal(pet, n, { overheal })`.
+
+Adding a pet should not require touching `engine/` or `ui/`. If it does, the
+right move is a new **general** hook rather than a special case — the engine
+still names no pet, Special or passive anywhere.
 
 A dev-mode assertion in `data/index.js` fails loudly if a species points at a
 Special or passive that does not exist.
@@ -466,64 +548,108 @@ Special or passive that does not exist.
 ### Balance harness
 
 ```bash
-node src/Pets/engine/balance.mjs 2000
+node src/Pets/engine/balance.mjs 2000        # level 1
+node src/Pets/engine/balance.mjs 2000 5      # level 5 — every second passive online
 ```
 
 Reports average and longest match length, draw rate, a solo win-rate table for
-every species, and a set of rule assertions. Current headline numbers (1,500
-matches, level 1, no Natures):
+every species, and **29 rule assertions**. Run it at both levels: several rules
+only exist once the Lv.5 passives are live, and a pet can be fine at one level
+and broken at the other.
 
-| | |
-|---|---|
-| Average turns | 97 |
-| Longest match | 196 (cap is 400) |
-| Draws | 0 |
+**Level-5 testing gives every die a flat +3** rather than rolling the real four
+`1d4` level-ups, as a stable estimate of three stat-ups' worth of growth. Rolling
+them per instance would put variance in the table that has nothing to do with the
+species being measured. HP is never bumped.
+
+Assertions are the memory of this project. Every rule that was ever argued over
+or accidentally reverted has one, and a few exist specifically because the
+behaviour was lost once already — Support bench charge and the Stagnation reset
+in particular. **Add one whenever a rule is added; never delete one to make a
+run go green.**
 
 ---
 
-## 15. CHANGES FROM v2.0
+## 15. CHANGES IN v3.1
+
+### The roster doubled
+
+Nine pets joined: **Cerberus, Milk Truck, Balto, Watthog, Quillbacabra,
+Punchadillo, Mosstiff, Bellybummer** and **Mega Chicken** — 20 species in all.
+They were designed before the game became an autobattler, so a few mechanics had
+to be adapted; where a card gave no name for a Special or passive, the shipped
+name is marked `provisional: true` and is waiting on a real one.
+
+They brought the roster's first **Healer** (Mosstiff) and first **Spirit** typing
+(Milk Truck), both of which the role and affinity systems already supported.
+
+### Rules that changed
 
 | Change | Detail |
 |---|---|
-| **Hellhound specials scale to 200%** | Both *Hellfire Bolt* and *Rending Bite* now roll at 200% Max ATK, up from +50%. This matches how the Fluffy preset was already written and puts the hounds in line with every other attacking Special |
-| **Emboar's Heat Up no longer heals** | It now only inflicts Burn |
-| **Bubble Shield no longer heals** | It now only grants the doubled DEF and the Damp on the attacker |
-| **Bubble Trouble Lv.5 passives filled in** | Both were `xxxx` placeholders. *Surface Tension* and *Undertow* are new content, flagged below |
-| **Shadow/Spirit chart corrected** | Now mutually advantaged, matching the written rule |
-| **Burn potency is captured on application** | Previously *Scorching Flames* was checked against the pet that was burning rather than the pet that applied the Burn, so the buff could apply to the wrong side |
-| **Felightning's Lv.1 passive** | Implemented as *Baton Pass* (the design's name) rather than the shipped *Get Away* |
-| **Knockout priority** | The side that just lost a pet acts first. Replaces both the old alternating-turn behaviour and the v3.0 rule of recalculating Max SPC initiative on each switch-in |
-| **Level-ups documented as `1d4`** | See §10 |
-| **Draw condition** | A match that reaches the turn cap is now an explicit draw rather than undefined |
+| **Stagnation resets on damage** | It never did — see §8. This is the single largest behavioural fix in the release |
+| **Support bench charge restored** | Now a role trait rather than a passive, and protected — see §4 |
+| **Rend no longer wears off** | Only a cleanse removes it |
+| **Damp weakened** | −10 → −5 Max DEF per stack |
+| **Hellfire Bolt** | 2 → 1 Fire damage |
+| **Intimidating** | Now grants advantage **and** +1 damage against full-health enemies |
+| **Hex Claws** | 1/6 → 25% |
+| **Famine Feast** | +20 ATK and a heart → +40 ATK, no heal |
+| **Terrorize** | Grants 3 Fade, up from 2 |
+| **Felightning reworked** | Static Shock loses TRUESTRIKE and becomes 300% ATK for 2 damage; all three passives replaced by *Get Away* and *Parting Charge* |
+| **Undertow retired** | Both Bubble Troubles now run *Surface Tension* |
+| **Overhealing** | Some effects carry a pet past its Max HP; the extra hearts persist and are drawn in gold |
+| **Forced switching** | A Special can now drag a benched pet onto the field (Balto) |
+| **Double knockout** | A reactive passive can take the last pet on both sides down together. That is a draw, reported as `double_knockout` rather than the turn cap |
 
-### Content authored during this pass
+### Engine additions
 
-Two Level-5 passives were placeholders (`xxxx`) and had to be written to make the
-roster complete. Both are cheap to change in `data/passives.js`:
-
-- **Surface Tension** (Bubble Trouble Physical) — recover 25 charge when your
-  Bubble Shield pops.
-- **Undertow** (Bubble Trouble Affinity) — Damp you inflict also strips 10 Max ATK.
+The declarative status system (§5), plus hooks `onTurnStart`, `onAttackMiss`,
+`attackScale`, `onEnterField` for opening leads, a `killer` argument on
+`onFaint`, and the `ctx` helpers listed in §14. Every one is general: no engine
+file names a pet, a Special or a passive.
 
 ---
 
-## 16. OPEN BALANCE QUESTIONS
+## 16. READING THE BALANCE TABLES
+
+The harness prints two, and **they measure different things**:
+
+- **Solo win rate** — round-robin 1v1. Good for raw stat lines and self-contained
+  kits. Structurally blind to anything that reads the bench.
+- **5v5 roster win rate** — how often the side fielding a pet wins a random 5v5.
+  This is the one that counts for Support, Healer, and anything with a
+  bench-facing or death-triggered effect.
+
+The gap between them is the point. At level 5, Mosstiff reads 22.8% solo and
+44.7% in a roster; Felightning 7.9% and 34.9%. Neither is a 22-point buff — a
+duel simply cannot exercise an ally-healing Special or bench charge. **Never
+retune a Support or Healer off the solo table.**
+
+Conversely, Necrodoodle reads 59.6% solo and 48.3% in a roster: a strong duellist
+that contributes less to a team.
+
+### Open questions at v3.1
 
 Flagged rather than silently fixed, because they are design calls:
 
-1. **Heat Up is now weak for a 100-charge Special.** Removing the heal leaves it
-   as "inflict one Burn", which is worth roughly 1/6 × 2 damage per subsequent
-   turn. Emboar still tests well because *Flame Aura* and its 6 HP carry it, but
-   the Special itself no longer feels like a payoff. Options: raise the Burn to
-   2 stacks, or have it also grant Emboar a defensive buff.
-2. **Felightning solo win rate is ~1%.** Expected — it is a 3 HP Support whose
-   entire value is generating charge from the bench, which a 1v1 test cannot
-   measure. Judge it only in full 5v5 lineups.
-3. **Gnollbacabra sits at ~37%.** 4 HP and a `d20` DEF is a lot of fragility for
-   an attacker whose Special is a slow debuff. It may want a fifth heart.
-4. **Necrodoodle leads at ~76%.** `d40 / d30 / d40` with a curse engine and a
-   200% Special is a strong package. Worth watching once more Spirit-typed pets
-   exist to punish it.
-5. **A 5v5 averages ~95 turns.** That is inherent to small HP pools and a ~50%
-   hit rate. 8x playback covers it, but if matches should be shorter the levers
-   are base damage, the hit threshold, or an earlier Stagnation trigger.
+1. **Scruffy leads both tables** (72.8% solo, 69.0% roster — eight points clear
+   of second). Making Rend permanent and halving Damp were nerfs to everything
+   *except* the one pet whose Thick Fur ignores both, so tightening debuffs
+   buffs Scruffy every time. Watch this whenever a debuff is strengthened.
+2. **Bellybummer is last at 33.6%** even in a roster, despite 5 stacks each of
+   Disadvantage and Stunt. Both fire only on entry, so a lead Bellybummer spends
+   them on one pet and has nothing afterwards. It may want an effect that
+   recurs.
+3. **Hellhound (Physical) at 71.1% solo.** *Intimidating* now doubles the damage
+   of every opening attack against a fresh pet, which is worth more in a duel
+   than in a roster (53.9%).
+4. **Heat Up is still weak for a 100-charge Special** — "inflict one Burn" is
+   roughly 1/6 × 2 damage per following turn. Emboar tests fine because *Flame
+   Aura* carries it, but the Special is not a payoff.
+5. **Mutual wipeouts run ~1.8% of level-5 matches**, all from *Parting Quills*
+   killing the killer when both are the last pet standing. Working as written;
+   noted because a draw used to be impossible.
+6. **A 5v5 averages ~91 turns.** Inherent to small HP pools and a ~50% hit rate.
+   8x playback covers it; the levers if it should be shorter are base damage,
+   the hit threshold, or an earlier Stagnation trigger.

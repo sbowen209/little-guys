@@ -23,7 +23,7 @@ export const ROLE_META = {
   [ROLE.AFF_TANK]:     { label: 'Affinity Tank',  short: 'AFF DEF', hex: '#22d3ee', blurb: 'Blunts elemental damage and sustain.' },
   [ROLE.STUNNER]:      { label: 'Stunner',        short: 'STUN',    hex: '#c084fc', blurb: 'Control specialist. Builds Stun Counters on every hit.' },
   [ROLE.HEALER]:       { label: 'Healer',         short: 'HEAL',    hex: '#4ade80', blurb: 'Builds Heart Counters to top up the wounded.' },
-  [ROLE.SUPPORT]:      { label: 'Support',        short: 'SUPP',    hex: '#fbbf24', blurb: 'Backline utility. Builds and relays Special charge from the bench.' },
+  [ROLE.SUPPORT]:      { label: 'Support',        short: 'SUPP',    hex: '#fbbf24', blurb: 'Backline utility. Banks half its Special charge even while benched.' },
 };
 
 export const ROLE_ORDER = [
@@ -110,6 +110,15 @@ export const RULES = {
   STAGNATION_FLOOR: 0.1,
   /** Chance a Paralyzed pet loses its action (checked after SPC generation). */
   PARALYZE_SKIP_IN: 4,
+  /** Max DEF lost per stack of Damp. */
+  DAMP_DEF_PENALTY: 5,
+  /**
+   * Fraction of its own SPC roll a benched Support banks each of its team's
+   * turns. This is a property of the ROLE, not of any passive — it is what
+   * makes holding a Support in reserve a real tactical choice instead of a
+   * dead roster slot. Do not move it back behind a passive.
+   */
+  SUPPORT_BENCH_SHARE: 0.5,
   /** Hard stop so a pathological matchup can never hang the simulator. */
   MAX_TURNS: 400,
   /** Level ceiling and the stat granted per level above 1. */

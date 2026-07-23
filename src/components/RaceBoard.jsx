@@ -285,6 +285,14 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
         >
           <div className={`relative h-full w-full origin-bottom transition-all duration-300 ${activeRacerIndex === 0 ? 'scale-[1.15]' : 'scale-[0.9] opacity-80 saturate-50'}`}>
             
+            {racer1.striderStacks > 0 && (
+               <div className="absolute -top-20 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
+                  <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
+                     <span className="absolute top-0 right-0 text-xl drop-shadow-[0_0_12px_#38bdf8] font-black text-sky-400">💨{racer1.striderStacks}</span>
+                  </div>
+               </div>
+            )}
+            
             {racer1.isResilient && (
                <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
                   <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
@@ -331,6 +339,14 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
           style={{ transform: `translate(${r2Coords.x}px, ${r2Coords.y}px)`, transition: `transform ${racer2.transitionDuration || 0}ms linear`, zIndex: activeRacerIndex === 1 ? 10 : 5 }}
         >
           <div className={`relative h-full w-full origin-bottom transition-all duration-300 ${activeRacerIndex === 1 ? 'scale-[1.15]' : 'scale-[0.9] opacity-80 saturate-50'}`}>
+            
+            {racer2.striderStacks > 0 && (
+               <div className="absolute -top-20 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
+                  <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
+                     <span className="absolute top-0 right-0 text-xl drop-shadow-[0_0_12px_#38bdf8] font-black text-sky-400">💨{racer2.striderStacks}</span>
+                  </div>
+               </div>
+            )}
             
             {racer2.isResilient && (
                <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">

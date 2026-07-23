@@ -96,9 +96,12 @@ export function useRaceEngine(initialRacers) {
       headstrongUsed: false,
       cornerDemonUsed: false,
       jumperUsed: false,
+      tunnelingUsed: false,
+      strongFinisherLogged: false,
       hasAdvantage: false,
       isPenalized: false,
       isResilient: false,
+      striderStacks: 0,
       transitionDuration: 0,
       passives: r.passives || []
     }))
@@ -107,12 +110,10 @@ export function useRaceEngine(initialRacers) {
   const addLog = useCallback((msg) => setLogs((prev) => [...prev, msg]), []);
   const sleep = useCallback((ms) => new Promise(resolve => setTimeout(resolve, ms / gameSpeed)), [gameSpeed]);
 
-  // Generic Advantage Roll Helper
-  const evaluateRoll = (stat, hasAdvantage, isResilient) => {
-    const bonus = isResilient ? 1 : 0;
-    const r1 = rollDice(stat) + bonus;
+  const evaluateRoll = (stat, hasAdvantage, flatBonus = 0) => {
+    const r1 = rollDice(stat) + flatBonus;
     if (hasAdvantage) {
-       const r2 = rollDice(stat) + bonus;
+       const r2 = rollDice(stat) + flatBonus;
        return { value: Math.max(r1, r2), rolls: [r1, r2] };
     }
     return { value: r1, rolls: [r1] };
@@ -201,10 +202,27 @@ export function useRaceEngine(initialRacers) {
     if (localPosStart === 0 && pos > 0) localPosStart = TRACK_DATA.length;
 
     const isInTurn = TRACK_DATA.turns.some((t) => localPosStart >= t.start && localPosStart < t.end);
+    const isSpeedRoll = !isInTurn;
     const activeStat = isInTurn ? stats.turning : stats.speed;
     const statName = isInTurn ? 'Turn' : 'Speed';
 
-    // Per-Turn Resilient Logic Evaluation
+    // Strider: Hitting a turn resets stacks
+    if (isInTurn) {
+        racer.striderStacks = 0;
+    }
+
+    // Strong Finisher: +2 to Turn rolls in the final turn (125-150)
+    let finalTurnBonus = 0;
+    const isFinalTurn = isInTurn && localPosStart >= 125 && localPosStart < 150;
+    if (isFinalTurn && racer.passives.includes('strong_finisher')) {
+        finalTurnBonus = 2;
+        if (!racer.strongFinisherLogged) {
+            racer.strongFinisherLogged = true;
+            addLog(`STRONG FINISHER! ${racer.name} enters the final stretch with a burst of power!`);
+        }
+    }
+
+    // Resilient
     let isResilient = false;
     if (racer.passives.includes('resilient') && racer.position <= otherRacer.position - 3) {
        isResilient = true;
@@ -218,17 +236,34 @@ export function useRaceEngine(initialRacers) {
 
     let advantageThisRoll = racer.hasAdvantage;
     
+    // Corner Demon
     if (racer.passives.includes('corner_demon') && isInTurn && !racer.cornerDemonUsed) {
       advantageThisRoll = true;
       racer.cornerDemonUsed = true;
       addLog(`${racer.name}'s Corner Demon activates! Advantage going into the turn!`);
     }
 
+    // Soar
+    if (isSpeedRoll && racer.passives.includes('soar') && racer.position >= otherRacer.position) {
+      advantageThisRoll = true;
+      addLog(`SOAR! ${racer.name} rides the winds of first place!`);
+    }
+
     if (advantageThisRoll && racer.hasAdvantage) {
       racer.hasAdvantage = false;
     }
 
-    let { value: movement, rolls: movementRolls } = evaluateRoll(activeStat, advantageThisRoll, isResilient);
+    let striderBonus = 0;
+    if (isSpeedRoll && racer.passives.includes('strider')) {
+        striderBonus = racer.striderStacks || 0;
+    }
+    const flatBonus = (isResilient ? 1 : 0) + striderBonus + finalTurnBonus;
+
+    let { value: movement, rolls: movementRolls } = evaluateRoll(activeStat, advantageThisRoll, flatBonus);
+
+    if (isSpeedRoll && racer.passives.includes('strider')) {
+        racer.striderStacks += 1;
+    }
 
     let penaltyApplied = false;
     let barkCat = '';
@@ -257,7 +292,7 @@ export function useRaceEngine(initialRacers) {
       rolls: movementRolls, 
       stat: statName, 
       penaltyApplied, 
-      maxVal: activeStat + (isResilient ? 1 : 0)
+      maxVal: activeStat + flatBonus
     });
     
     await sleep(1200);
@@ -320,6 +355,23 @@ export function useRaceEngine(initialRacers) {
         const jumpDiff = TRACK_DATA.jumps[localPosForJump];
         await sleep(300);
 
+        // Tunneling logic: Auto-pass the first jump
+        if (racer.passives.includes('tunneling') && !racer.tunnelingUsed) {
+            racer.tunnelingUsed = true;
+            addLog(`TUNNELING! ${racer.name} burrows flawlessly under the obstacle!`);
+            setFlash({ racerIndex: rIndex, type: 'jump_success', value: 'AUTO', maxVal: stats.jump });
+            await sleep(900);
+            setFlash(null);
+            
+            // Winged logic applied to a successful tunnel bypass
+            if (racer.passives.includes('winged')) {
+               const extraDist = rollDice(2);
+               movementRemaining += extraDist;
+               addLog(`WINGED! ${racer.name} bursts from the tunnel and glides an extra ${extraDist} spaces!`);
+            }
+            continue; 
+        }
+
         let jumpAdvantage = racer.hasAdvantage;
 
         if (racer.passives.includes('jumper') && !racer.jumperUsed) {
@@ -332,7 +384,7 @@ export function useRaceEngine(initialRacers) {
           racer.hasAdvantage = false;
         }
 
-        const { value: jumpRoll, rolls: jumpRolls } = evaluateRoll(stats.jump, jumpAdvantage, isResilient);
+        const { value: jumpRoll, rolls: jumpRolls } = evaluateRoll(stats.jump, jumpAdvantage, isResilient ? 1 : 0);
 
         setFlash({ 
           racerIndex: rIndex, 
@@ -355,6 +407,14 @@ export function useRaceEngine(initialRacers) {
           setFlash({ racerIndex: rIndex, type: 'jump_success', value: jumpRoll });
           await sleep(900);
           setFlash(null);
+
+          // Winged logic on standard jump success
+          if (racer.passives.includes('winged')) {
+             const extraDist = rollDice(2);
+             movementRemaining += extraDist;
+             addLog(`WINGED! ${racer.name} glides an extra ${extraDist} spaces after clearing the hazard!`);
+          }
+
         } else {
           if (racer.passives.includes('headstrong') && !racer.headstrongUsed) {
              addLog(`HEADSTRONG! ${racer.name} powers through the hazard without breaking stride!`);
@@ -378,11 +438,16 @@ export function useRaceEngine(initialRacers) {
       }
     }
 
-    if (stoppedEarlyReason === 'turn_boundary' && movementRemaining >= 5) {
-       addLog(getBark('hard_brake', racer.name));
-       setFlash({ racerIndex: rIndex, type: 'hard_brake', value: movementRemaining });
-       await sleep(1500);
-       setFlash(null);
+    if (stoppedEarlyReason === 'turn_boundary') {
+       racer.striderStacks = 0;
+       if (movementRemaining >= 5) {
+           addLog(getBark('hard_brake', racer.name));
+           setFlash({ racerIndex: rIndex, type: 'hard_brake', value: movementRemaining });
+           await sleep(1500);
+           setFlash(null);
+       }
+    } else if (stoppedEarlyReason === 'crash') {
+       racer.striderStacks = 0;
     }
 
     racer.turnCount = (racer.turnCount || 0) + 1;

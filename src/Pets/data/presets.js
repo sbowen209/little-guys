@@ -37,7 +37,8 @@ export const PRESETS = {
     variant: null,
     level: 5,
     natures: { atk: 11, def: 8, spc: -3 },
-    base: { hp: 5, atk: 69, def: 40, spc: 29 },
+    // 30 base + 8 Nature + 4 from a level-up.
+    base: { hp: 5, atk: 69, def: 42, spc: 29 },
     art: '/images/pets/HellHound_Fuzzy.webp',
     flavor: 'A d69 attack die. Slow to charge, but it rarely needs to.',
   }),
@@ -45,18 +46,18 @@ export const PRESETS = {
   lovey: preset('lovey', 'bubble_trouble_physical', {
     name: 'Lovey',
     variant: null,
-    level: 1,
+    level: 2,
     natures: { atk: 1, def: 1, spc: 3 },
-    base: { hp: 8, atk: 21, def: 51, spc: 33 },
+    base: { hp: 8, atk: 22, def: 51, spc: 33 },
     flavor: 'Runs the shield. Feeds charge to Dovey and takes it right back.',
   }),
 
   dovey: preset('dovey', 'bubble_trouble_affinity', {
     name: 'Dovey',
     variant: null,
-    level: 1,
+    level: 2,
     natures: { atk: -3, def: -7, spc: -8 },
-    base: { hp: 8, atk: 17, def: 43, spc: 22 },
+    base: { hp: 8, atk: 20, def: 43, spc: 22 },
     flavor: 'Weak on paper. Never charges alone.',
   }),
 };

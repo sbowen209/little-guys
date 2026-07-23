@@ -15,15 +15,17 @@ const HEART_PATH =
  */
 function PetNameplate({ pet, side, isActive, damageFlash }) {
   const ready = pet.spc >= RULES.SPC_CAP;
+  // A few effects heal past Max HP, so the row grows rather than hiding the surplus.
+  const slots = Math.max(pet.maxHp, pet.hp);
 
   return (
     <div className={`pb-plate pb-plate--${side === 0 ? 'p1' : 'p2'} ${isActive ? 'is-active' : ''}`}>
       <div className={`pb-plate__hearts ${damageFlash ? 'is-hit' : ''}`}>
-        {Array.from({ length: pet.maxHp }).map((_, i) => (
+        {Array.from({ length: slots }).map((_, i) => (
           <svg
             key={i}
             viewBox="0 0 24 24"
-            className={`pb-hp ${i < pet.hp ? 'is-full' : 'is-empty'} ${damageFlash && i === pet.hp ? 'is-lost' : ''}`}
+            className={`pb-hp ${i < pet.hp ? 'is-full' : 'is-empty'} ${i >= pet.maxHp ? 'is-over' : ''} ${damageFlash && i === pet.hp ? 'is-lost' : ''}`}
           >
             <path d={HEART_PATH} />
           </svg>

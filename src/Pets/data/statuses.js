@@ -7,8 +7,31 @@
  * Fields:
  *   kind        'debuff' blocks on debuff immunity (Thick Fur); 'buff' never does.
  *   stackable   false collapses to a single stack.
- *   defMod      (pet, stacks) => multiplier/flat pipeline entry, see combatant.js
- *   tickOnTurn  rolled at the owner's turn start (Burn).
+ *
+ * ── DECLARATIVE BEHAVIOUR ──────────────────────────────────────────
+ * The engine honours the fields below generically, so a status that only needs
+ * these is pure data — no engine file has to change to add it.
+ *
+ *   attackAdvantage   number folded into the owner's net advantage when it attacks
+ *   damageFloor       the owner's attacks deal at least this much damage
+ *   blocksSpecial     the owner cannot spend its Special meter
+ *   thorns            damage reflected at whoever damages the owner with an attack
+ *   spcDice           dice rolled for Special charge instead of one; all are summed
+ *   spcMult           multiplier on the Special die size for the roll
+ *   tickOnTurn        { dieSize, procValues, damage, clearOnProc } rolled per stack
+ *                     at the owner's turn start
+ *
+ * ── DECLARATIVE EXPIRY ─────────────────────────────────────────────
+ *   consumeOnAttack   stacks removed after the owner attacks, hit or miss
+ *   consumeOnHit      stacks removed only after an attack that lands
+ *   consumeOnDamaged  stacks removed when the owner is damaged
+ *   consumeOnSpcRoll  stacks removed after the owner rolls for Special charge
+ *   expireAtTurnEnd   stacks removed at the end of the owner's own turn
+ *   clearOnExit       cleared entirely when the owner leaves the field
+ *
+ * Burn, Rend, Fade, Cursed, Bubble Shield, Damp, Shed and Stagnation predate
+ * this and are still resolved bespoke in the engine — their interactions with
+ * the defence pipeline and with Burn potency do not reduce to these fields.
  */
 
 export const STATUS = {
@@ -23,6 +46,13 @@ export const STATUS = {
   DAMP: 'damp',
   SHED: 'shed',
   STAGNATION: 'stagnation',
+  ZAPTAP: 'zaptap',
+  ADVANTAGE: 'advantage',
+  DISADVANTAGE: 'disadvantage',
+  ENERGIZED: 'energized',
+  STUNT: 'stunt',
+  POWERFUL: 'powerful',
+  BLEED: 'bleed',
 };
 
 export const STATUS_DEFS = {
@@ -44,7 +74,7 @@ export const STATUS_DEFS = {
     kind: 'debuff',
     stackable: true,
     tone: '#f43f5e',
-    desc: 'Max DEF is halved. One stack is consumed each time you are attacked.',
+    desc: 'Max DEF is halved. Does not wear off.',
   },
   [STATUS.FADE]: {
     id: STATUS.FADE,
@@ -107,7 +137,7 @@ export const STATUS_DEFS = {
     kind: 'debuff',
     stackable: true,
     tone: '#60a5fa',
-    desc: 'Max DEF reduced by 10 per stack. Cleared when you take damage.',
+    desc: 'Max DEF reduced by 5 per stack. Cleared when you take damage.',
   },
   [STATUS.SHED]: {
     id: STATUS.SHED,
@@ -126,6 +156,85 @@ export const STATUS_DEFS = {
     stackable: true,
     tone: '#c084fc',
     desc: 'Applied to both pets when neither loses health for too long. Each stack cuts Max DEF by 10%.',
+  },
+
+  /* ── Declarative statuses ───────────────────────────────────────── */
+
+  [STATUS.ZAPTAP]: {
+    id: STATUS.ZAPTAP,
+    name: 'Zaptap',
+    icon: '🌩️',
+    kind: 'buff',
+    stackable: true,
+    tone: '#facc15',
+    desc: 'When damaged by an attack, deal 1 damage back to the attacker. One stack is consumed.',
+    thorns: 1,
+    consumeOnDamaged: 1,
+  },
+  [STATUS.ADVANTAGE]: {
+    id: STATUS.ADVANTAGE,
+    name: 'Advantage',
+    icon: '🔼',
+    kind: 'buff',
+    stackable: true,
+    tone: '#4ade80',
+    desc: 'Your next attack rolls with Advantage. One stack is consumed per attack.',
+    attackAdvantage: 1,
+    consumeOnAttack: 1,
+  },
+  [STATUS.DISADVANTAGE]: {
+    id: STATUS.DISADVANTAGE,
+    name: 'Disadvantage',
+    icon: '🔽',
+    kind: 'debuff',
+    stackable: true,
+    tone: '#fb7185',
+    desc: 'Your next attack rolls with Disadvantage. One stack is consumed per attack.',
+    attackAdvantage: -1,
+    consumeOnAttack: 1,
+  },
+  [STATUS.ENERGIZED]: {
+    id: STATUS.ENERGIZED,
+    name: 'Energized',
+    icon: '🔋',
+    kind: 'buff',
+    stackable: true,
+    tone: '#22d3ee',
+    desc: 'Roll your Special die twice and bank both. One stack is consumed per roll.',
+    spcDice: 2,
+    consumeOnSpcRoll: 1,
+  },
+  [STATUS.STUNT]: {
+    id: STATUS.STUNT,
+    name: 'Stunt',
+    icon: '🚫',
+    kind: 'debuff',
+    stackable: true,
+    tone: '#f97316',
+    desc: 'You cannot cast your Special, even at a full meter. One stack falls off at the end of your turn.',
+    blocksSpecial: true,
+    expireAtTurnEnd: 1,
+  },
+  [STATUS.POWERFUL]: {
+    id: STATUS.POWERFUL,
+    name: 'Powerful',
+    icon: '💥',
+    kind: 'buff',
+    stackable: true,
+    tone: '#f59e0b',
+    desc: 'Your attacks deal at least 2 damage. One stack is consumed per attack that lands.',
+    damageFloor: 2,
+    consumeOnHit: 1,
+  },
+  [STATUS.BLEED]: {
+    id: STATUS.BLEED,
+    name: 'Bleed',
+    icon: '🩹',
+    kind: 'debuff',
+    stackable: true,
+    tone: '#dc2626',
+    desc: 'At the start of your turn, roll 1d4 per stack. Each 1 deals 1 damage and clears that stack.',
+    tickOnTurn: { dieSize: 4, procValues: [1], damage: 1, clearOnProc: true },
   },
 };
 

@@ -31,16 +31,21 @@ export const OpeningSplash = memo(function OpeningSplash({ state }) {
 /** End card: who won, who was left standing, and what to do next. */
 export const ResultOverlay = memo(function ResultOverlay({ outcome, state, onRematch, onExit }) {
   const draw = outcome.winner === null;
+  const bothWiped = outcome.reason === 'double_knockout';
   const survivors = draw
     ? []
     : state.teams[outcome.winner].filter((pet) => !pet.fainted);
 
   return (
     <div className="pb-result">
-      <span className="pb-result__kicker">{draw ? 'Stalemate' : `Player ${outcome.winner + 1} wins`}</span>
+      <span className="pb-result__kicker">
+        {draw ? (bothWiped ? 'Nobody left standing' : 'Stalemate') : `Player ${outcome.winner + 1} wins`}
+      </span>
       <span className="pb-result__title">{draw ? 'Draw' : 'Victory'}</span>
       <span className="pb-result__stat">
-        {outcome.turns} turns · {draw ? 'turn limit reached' : `${survivors.length} pet${survivors.length === 1 ? '' : 's'} standing`}
+        {outcome.turns} turns · {draw
+          ? (bothWiped ? 'both teams wiped out' : 'turn limit reached')
+          : `${survivors.length} pet${survivors.length === 1 ? '' : 's'} standing`}
       </span>
 
       {survivors.length > 0 && (

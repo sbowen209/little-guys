@@ -11,12 +11,33 @@ export const MOUNTS = {
     ],
     baseStats: { speed: 20, jump: 15, turning: 15 } 
   },
-  wolf: { 
-    id: 'wolf', 
+  goraffe: { 
+    id: 'goraffe', 
     skins: [
-      { id: 'default', name: 'Wolf', buttonLabel: 'Default', imagePath: '/images/mounts/Werewolf.webp', facing: 'Left' }
+      { id: 'default', name: 'Throat Goat', buttonLabel: 'Default', imagePath: '/images/mounts/Goraffe.webp', facing: 'Left' }
     ],
-    baseStats: { speed: 24, jump: 18, turning: 8 } 
+    baseStats: { speed: 24, jump: 16, turning: 8 } 
+  },
+  warhog: { 
+    id: 'warhog', 
+    skins: [
+      { id: 'default', name: 'Warhog', buttonLabel: 'Default', imagePath: '/images/mounts/Warhog.webp', facing: 'Left' }
+    ],
+    baseStats: { speed: 18, jump: 10, turning: 20 } 
+  },
+  tunnel_viper: { 
+    id: 'tunnel_viper', 
+    skins: [
+      { id: 'default', name: 'Tunnel Viper', buttonLabel: 'Default', imagePath: '/images/mounts/TunnelViper.webp', facing: 'Right' }
+    ],
+    baseStats: { speed: 20, jump: 6, turning: 23 } 
+  },
+  perseus: { 
+    id: 'perseus', 
+    skins: [
+      { id: 'default', name: 'Perseus', buttonLabel: 'Default', imagePath: '/images/mounts/Perseus.webp', facing: 'Left' }
+    ],
+    baseStats: { speed: 17, jump: 18, turning: 17 } 
   },
   buoffolaunt: { 
     id: 'buoffolaunt', 
@@ -35,6 +56,7 @@ export const MOUNTS = {
     baseStats: { speed: 17, jump: 10, turning: 23 } 
   },
   bolt_bison: { 
+    // Player's Beefcake is preserved, but removed from AI generation pool
     id: 'bolt_bison', 
     skins: [
       { id: 'default', name: 'Bolt Bison', buttonLabel: 'Default', imagePath: '/images/mounts/BoltBison.webp', facing: 'Left' },
@@ -51,6 +73,7 @@ export const MOUNTS = {
   }
 };
 
+// Player's Wager Circuit Roster
 export const PLAYER_PRESETS = [
   { id: 'plum', mountId: 'buoffolaunt', skinId: 'plum', label: 'Plum (Lvl 5)', speed: 24, jump: 12, turning: 15, level: 5, wins: 4, losses: 2, passives: ['headstrong'] },
   { id: 'fudgedale', mountId: 'mudsdale', skinId: 'fudgedale', label: 'Fudgedale (Lvl 4)', speed: 19, jump: 8, turning: 26, level: 4, wins: 2, losses: 1, passives: [] },
@@ -62,7 +85,12 @@ export const AVAILABLE_PASSIVES = [
   { id: 'super_charged', label: 'Super Charged', desc: 'Rolling a 1 grants advantage on the next roll.' },
   { id: 'corner_demon', label: 'Corner Demon', desc: 'Advantage on first turn.' },
   { id: 'jumper', label: 'Jumper', desc: 'Advantage on first jump.' },
-  { id: 'resilient', label: 'Resilient', desc: 'Gain +1 to all dice rolls when behind by 3 or more spaces at the start of the turn.' }
+  { id: 'resilient', label: 'Resilient', desc: 'Gain +1 to all dice rolls when behind by 3 or more spaces at the start of the turn.' },
+  { id: 'strider', label: 'Strider', desc: '+1 to speed rolls, stacking each consecutive speed roll. Resets on failed jump or hitting a turn.' },
+  { id: 'strong_finisher', label: 'Strong Finisher', desc: '+2 to all turn rolls on the final turn of the track.' },
+  { id: 'tunneling', label: 'Tunneling', desc: 'Automatically passes the first jump of the race.' },
+  { id: 'winged', label: 'Winged', desc: 'Gain an extra 1d2 distance upon successfully clearing a jump.' },
+  { id: 'soar', label: 'Soar', desc: 'Advantage on speed rolls while in first place.' }
 ];
 
 // -----------------------------------------------------------------------------
@@ -82,29 +110,48 @@ export const rollNatureModifier = () => {
   return -rollDie(6);
 };
 
-export const generateOpponent = (index) => {
-  const level = rollDie(4) + 1; 
+export const generateOpponent = (index, isAce = false) => {
+  let level;
+  if (isAce) {
+    level = Math.random() < 0.10 ? 6 : 5;
+  } else {
+    const lr = Math.random();
+    if (lr < 0.20) level = 2;
+    else if (lr < 0.50) level = 3;
+    else if (lr < 0.80) level = 4;
+    else level = 5;
+  }
 
-  const rand = Math.random();
-  let speciesId = 'tauros';
-  if (rand < 0.40) speciesId = 'tauros';
-  else if (rand < 0.70) speciesId = 'harehorse'; 
-  else if (rand < 0.90) speciesId = 'mudsdale';
-  else speciesId = 'buoffolaunt';
-
+  // Tiered Rarity Pool Generation
+  const rarityRoll = Math.random();
+  let speciesPool = [];
+  
+  if (rarityRoll < 0.60) {
+     speciesPool = ['tauros', 'harehorse']; // 60% Common
+  } else if (rarityRoll < 0.90) {
+     speciesPool = ['goraffe', 'mudsdale', 'warhog']; // 30% Uncommon
+  } else {
+     speciesPool = ['buoffolaunt', 'tunnel_viper', 'perseus']; // 10% Rare
+  }
+  
+  const speciesId = speciesPool[Math.floor(Math.random() * speciesPool.length)];
   const base = MOUNTS[speciesId];
   
   let skinId = 'default';
   if (speciesId === 'tauros') {
     if (level <= 2) skinId = 'college';
     else if (level <= 4) skinId = 'default';
-    else if (level === 5) skinId = 'yoked';
+    else if (level >= 5) skinId = 'yoked';
   }
   const skin = base.skins.find(s => s.id === skinId) || base.skins[0];
 
-  const spdMod = rollNatureModifier();
-  const jmpMod = rollNatureModifier();
-  const trnMod = rollNatureModifier();
+  let spdMod, jmpMod, trnMod, natureSum;
+  do {
+    spdMod = rollNatureModifier();
+    jmpMod = rollNatureModifier();
+    trnMod = rollNatureModifier();
+    natureSum = spdMod + jmpMod + trnMod;
+  } while (isAce && natureSum < 0);
 
   let stats = {
     speed: Math.max(1, base.baseStats.speed + spdMod),
@@ -120,14 +167,22 @@ export const generateOpponent = (index) => {
   }
 
   let passives = [];
-  if (level === 5) {
+  
+  // Base Passives mapped to Level 1
+  if (speciesId === 'perseus') passives.push('winged'); 
+  
+  // Level 5 Ace Passives
+  if (level >= 5) {
     if (speciesId === 'harehorse') passives.push('jumper');
     if (speciesId === 'mudsdale') passives.push('corner_demon');
     if (speciesId === 'buoffolaunt') passives.push('headstrong');
     if (speciesId === 'tauros') passives.push('resilient'); 
+    if (speciesId === 'goraffe') passives.push('strider'); 
+    if (speciesId === 'warhog') passives.push('strong_finisher'); 
+    if (speciesId === 'tunnel_viper') passives.push('tunneling'); 
+    if (speciesId === 'perseus') passives.push('jumper'); 
   }
 
-  const natureSum = spdMod + jmpMod + trnMod;
   let winRateBase = 0.5;
   if (natureSum >= 3) winRateBase = 0.65 + (Math.random() * 0.1);
   else if (natureSum <= -3) winRateBase = 0.25 + (Math.random() * 0.1);
@@ -149,6 +204,7 @@ export const generateOpponent = (index) => {
     stats,
     wins,
     losses,
-    passives
+    passives,
+    isAce
   };
 };

@@ -52,7 +52,7 @@ export const SPECIES = {
     family: 'emboar',
     role: ROLE.AFF_ATTACKER,
     typing: { offensive: ELEMENT.FIRE, defensive: ELEMENT.FIRE },
-    base: { hp: 6, atk: 35, def: 40, spc: 33 },
+    base: { hp: 5, atk: 35, def: 40, spc: 30 },
     special: 'heat_up',
     passives: ['flame_aura', 'afterburn'],
     art: '/images/pets/Emboar.webp',
@@ -66,7 +66,7 @@ export const SPECIES = {
     family: 'terrier',
     role: ROLE.STUNNER,
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
-    base: { hp: 5, atk: 30, def: 45, spc: 25 },
+    base: { hp: 5, atk: 30, def: 40, spc: 25 },
     special: 'terrorize',
     passives: ['ghostly_blur', 'capitalize'],
     art: '/images/pets/TerrorTerrier.webp',
@@ -138,10 +138,10 @@ export const SPECIES = {
     typing: { offensive: ELEMENT.AIR, defensive: ELEMENT.AIR },
     base: { hp: 3, atk: 25, def: 30, spc: 40 },
     special: 'static_shock',
-    passives: ['backline_current', 'baton_pass', 'overcharge'],
+    passives: ['get_away', 'parting_charge'],
     art: '/images/pets/Felightning.webp',
     facing: 'Right',
-    flavor: 'Feeds the front line with charge from the sidelines. Fragile once it is out there itself.',
+    flavor: 'Fast, fragile, and vindictive — it leaves the field with the lights still flickering.',
   },
 
   bubble_trouble_physical: {
@@ -170,9 +170,137 @@ export const SPECIES = {
     typing: { offensive: ELEMENT.WATER, defensive: ELEMENT.WATER },
     base: { hp: 8, atk: 20, def: 50, spc: 30 },
     special: 'bubble_shield',
-    passives: ['lovey_dovey', 'undertow'],
+    passives: ['lovey_dovey', 'surface_tension'],
     art: '/images/pets/BubbleTrouble_Affinity.webp',
     facing: 'Left',
-    flavor: 'The other half. Drags attackers under with every popped shield.',
+    flavor: 'The other half. Soaks elemental damage and banks charge off every popped shield.',
+  },
+
+  /* ══ SECOND WAVE ═══════════════════════════════════════════════════
+   * Stat lines, roles, typings and mechanics are exactly as authored on the
+   * cards. Where a card gave only a defensive typing, the offensive one follows
+   * the convention of the role: PHYSICAL for Attackers, Tanks and Stunners
+   * (which ignore the affinity chart), and the defensive element for the
+   * Affinity roles and Support.
+   *
+   * `flavor` is deliberately absent — none was written, and the setup screen
+   * simply renders nothing rather than showing invented text.
+   */
+
+  cerberus: {
+    id: 'cerberus',
+    name: 'Cerberus',
+    family: 'cerberus',
+    role: ROLE.ATTACKER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
+    base: { hp: 7, atk: 60, def: 15, spc: 20 },
+    special: 'twin_fangs',
+    passives: ['twin_bite', 'press_the_advantage'],
+    art: '/images/pets/Cerberus.webp',
+    facing: 'Right',
+  },
+
+  milk_truck: {
+    id: 'milk_truck',
+    name: 'Milk Truck',
+    family: 'milktruck',
+    role: ROLE.AFF_TANK,
+    typing: { offensive: ELEMENT.SPIRIT, defensive: ELEMENT.SPIRIT },
+    base: { hp: 10, atk: 20, def: 40, spc: 20 },
+    special: 'milk',
+    passives: ['milk_shake', 'second_stomach'],
+    art: '/images/pets/MilkTruck.webp',
+    facing: 'Left',
+  },
+
+  balto: {
+    id: 'balto',
+    name: 'Balto',
+    family: 'balto',
+    role: ROLE.ATTACKER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
+    base: { hp: 6, atk: 35, def: 35, spc: 35 },
+    special: 'sled_charge',
+    passives: ['first_light', 'fresh_legs'],
+    art: '/images/pets/Balto.webp',
+    facing: 'Left',
+  },
+
+  watthog: {
+    id: 'watthog',
+    name: 'Watthog',
+    family: 'watthog',
+    role: ROLE.AFF_ATTACKER,
+    typing: { offensive: ELEMENT.AIR, defensive: ELEMENT.AIR },
+    base: { hp: 5, atk: 35, def: 40, spc: 30 },
+    special: 'chain_shock',
+    passives: ['chain_lightning', 'supercharge'],
+    art: '/images/pets/Watthog.webp',
+    facing: 'Left',
+  },
+
+  quillbacabra: {
+    id: 'quillbacabra',
+    name: 'Quillbacabra',
+    family: 'gnoll',
+    role: ROLE.TANK,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
+    base: { hp: 4, atk: 30, def: 40, spc: 40 },
+    special: 'quill_guard',
+    passives: ['bristleback', 'parting_quills'],
+    art: '/images/pets/Quillbacabra.webp',
+    facing: 'Right',
+  },
+
+  punchadillo: {
+    id: 'punchadillo',
+    name: 'Punchadillo',
+    family: 'punchadillo',
+    role: ROLE.STUNNER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
+    base: { hp: 5, atk: 50, def: 30, spc: 20 },
+    special: 'haymaker',
+    passives: ['concussive_blast', 'rolling_guard'],
+    art: '/images/pets/Punchadillo.webp',
+    facing: 'Left',
+  },
+
+  mosstiff: {
+    id: 'mosstiff',
+    name: 'Mosstiff',
+    family: 'mosstiff',
+    role: ROLE.HEALER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
+    base: { hp: 5, atk: 30, def: 35, spc: 25 },
+    special: 'verdant_bloom',
+    passives: ['photosynthesis', 'last_bloom'],
+    art: '/images/pets/Mosstiff.webp',
+    facing: 'Left',
+  },
+
+  bellybummer: {
+    id: 'bellybummer',
+    name: 'Bellybummer',
+    family: 'bellybummer',
+    role: ROLE.SUPPORT,
+    typing: { offensive: ELEMENT.SHADOW, defensive: ELEMENT.SHADOW },
+    base: { hp: 4, atk: 30, def: 30, spc: 40 },
+    special: 'lifesteal',
+    passives: ['spooked', 'stage_fright'],
+    art: '/images/pets/Bellybummer.webp',
+    facing: 'Left',
+  },
+
+  mega_chicken: {
+    id: 'mega_chicken',
+    name: 'Mega Chicken',
+    family: 'megachicken',
+    role: ROLE.ATTACKER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.AIR },
+    base: { hp: 4, atk: 50, def: 25, spc: 30 },
+    special: 'talon_flurry',
+    passives: ['raking_spurs', 'death_throes'],
+    art: '/images/pets/MegaChicken.webp',
+    facing: 'Left',
   },
 };

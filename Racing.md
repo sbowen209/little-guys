@@ -60,28 +60,39 @@ This section contains the contents of the repository's files.
 import { assetUrl } from '../utils/assets';
 
 // -----------------------------------------------------------------------------
-// PROCEDURAL ENVIRONMENT COMPONENTS (DAYLIGHT / GRASS THEME)
+// TRACK ENVIRONMENT COMPONENTS
 // -----------------------------------------------------------------------------
-const Tree = ({ cx, cy, r }) => (
-  <g filter="url(#drop-shadow)">
-    <circle cx={cx + 4} cy={cy + 8} r={r} fill="#142e10" opacity="0.5" />
-    <circle cx={cx} cy={cy} r={r} fill="url(#tree-base)" />
-    <circle cx={cx - r * 0.15} cy={cy - r * 0.15} r={r * 0.7} fill="url(#tree-mid)" />
-    <circle cx={cx + r * 0.2} cy={cy + r * 0.15} r={r * 0.4} fill="url(#tree-highlight)" opacity="0.8" />
-    <path d={`M ${cx - r*.3} ${cy - r*.4} Q ${cx} ${cy - r*.6} ${cx + r*.4} ${cy - r*.2}`} stroke="#86efac" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.4"/>
-    <path d={`M ${cx - r*.5} ${cy + r*.1} Q ${cx - r*.2} ${cy + r*.3} ${cx + r*.1} ${cy + r*.4}`} stroke="#22c55e" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.3"/>
+const TrackLabel = ({ cx, cy, text, colorCode = '#fcd34d' }) => (
+  <g transform={`translate(${cx}, ${cy})`} filter="url(#drop-shadow)">
+    <rect x="-45" y="-12" width="90" height="24" fill="#1c1917" rx="12" opacity="0.85" stroke="#44403c" strokeWidth="2" />
+    <text x="0" y="3" fill={colorCode} fontSize="10" fontFamily="monospace" fontWeight="bold" textAnchor="middle" letterSpacing="1">
+      {text}
+    </text>
   </g>
 );
 
-const GardenBed = ({ cx, cy, rx, ry, rot = 0 }) => (
-  <ellipse cx={cx} cy={cy} rx={rx} ry={ry} transform={`rotate(${rot}, ${cx}, ${cy})`} fill="#243812" opacity="0.55" filter="url(#drop-shadow)" />
-);
-
-const Flower = ({ cx, cy, color, scale = 0.4, rot = 0 }) => (
-  <g transform={`translate(${cx}, ${cy}) scale(${scale}) rotate(${rot})`} filter="url(#drop-shadow)">
-    <image href={assetUrl(`/images/resources/Flower_${color}.webp`)} x="-35" y="-35" width="70" height="70" preserveAspectRatio="xMidYMid meet" />
-  </g>
-);
+const JumpMarker = ({ cx, cy, difficulty }) => {
+  const isHigh = difficulty === 15;
+  return (
+    <g transform={`translate(${cx}, ${cy})`}>
+      <rect x="5" y="5" width={isHigh ? 18 : 10} height="80" fill="rgba(0,0,0,0.5)" rx="4" filter="url(#light-blur)" />
+      <rect x="-15" y="0" width="30" height="80" fill="#855f41" rx="8" opacity="0.6"/>
+      <circle cx="0" cy="5" r="6" fill="#29160a" />
+      <circle cx="0" cy="75" r="6" fill="#29160a" />
+      {isHigh ? (
+        <>
+          <rect x="-7" y="5" width="14" height="70" fill="#1c1917" rx="3" />
+          <rect x="-5" y="5" width="10" height="70" fill="url(#warning-stripes)" rx="2" />
+        </>
+      ) : (
+        <>
+          <rect x="-4" y="5" width="8" height="70" fill="#5c3823" rx="3" />
+          <rect x="-2" y="5" width="4" height="70" fill="#8a5c3e" rx="1" />
+        </>
+      )}
+    </g>
+  )
+};
 
 // -----------------------------------------------------------------------------
 // MAIN COMPONENT
@@ -89,21 +100,16 @@ const Flower = ({ cx, cy, color, scale = 0.4, rot = 0 }) => (
 export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRacerIndex, flash, isRunning, trackData }) {
   
   const getMountScaleX = (racer, coords) => {
-    // Rely on the mount's intrinsic facing property ('Left' or 'Right')
     const baseFlip = racer.facing === 'Left' ? -1 : 1; 
-    
-    // coords.isFlipped indicates if the track direction is currently right-to-left
     return coords.isFlipped ? -baseFlip : baseFlip;
   };
 
-  // Safe dynamic positioning logic for the vertical side-bars so they never clip out of bounds
   const getSafeSideOffset = (coords) => {
     if (coords.x > 950) return -50;  
     if (coords.x < 150) return 90;   
     return coords.isFlipped ? -50 : 90; 
   };
 
-  // Ensure event popups don't clip through the top edge of the board when on the top straight
   const getSafePopupY = (coords) => {
     return coords.y < 120 ? coords.y + 80 : coords.y - 70;
   };
@@ -122,7 +128,6 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
       const textColor = isSpeed ? 'text-sky-300' : isJump ? 'text-emerald-300' : 'text-rose-300';
       const maxVal = flash.maxVal || 30;
       
-      // Expanded width so we have room for dual side-by-side rolls
       const offsetX = getSafeSideOffset(coords) - 20;
       const rollsToRender = flash.rolls || [flash.value];
 
@@ -137,9 +142,6 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
             <div className="flex gap-1.5 h-20 items-end justify-center">
               {rollsToRender.map((rVal, idx) => {
                 const heightPct = Math.min(100, Math.max(0, (rVal / maxVal) * 100));
-                
-                // If there are two rolls, dim the lowest one to clearly show it was discarded
-                // If they are a tie, we just arbitrarily dim the second one so it's visually apparent advantage fired
                 const isDiscarded = rollsToRender.length === 2 && 
                                     (rVal < flash.value || (rVal === flash.value && idx === 1 && rollsToRender[0] === rVal));
                 
@@ -197,6 +199,25 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
     <div className="w-full h-auto relative">
       <svg viewBox="0 0 1200 500" className="w-full h-auto drop-shadow-[0_35px_55px_rgba(0,0,0,0.95)] rounded-[2rem] sm:rounded-[3rem] overflow-hidden border-[4px] sm:border-[8px] border-stone-800 bg-[#728f3a]">
         <defs>
+          <style>
+            {`
+              .fire-pulse { animation: firePulse 3s ease-in-out infinite; }
+              .fire-spin { animation: fireSpin 10s linear infinite; stroke-dasharray: 60 40; transform-origin: 0 0; }
+              .fire-spin-rev { animation: fireSpinRev 7s linear infinite; stroke-dasharray: 30 20 10 20; transform-origin: 0 0; }
+              .lightning-spin { animation: fireSpinRev 12s steps(8) infinite; transform-origin: 0 0; }
+              .lightning-flash { animation: lightningFlash 1.5s infinite; }
+              
+              @keyframes firePulse { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.03); } }
+              @keyframes fireSpin { 100% { transform: rotate(360deg); } }
+              @keyframes fireSpinRev { 100% { transform: rotate(-360deg); } }
+              @keyframes lightningFlash { 
+                0%, 88%, 100% { opacity: 0; } 
+                90%, 96% { opacity: 1; filter: drop-shadow(0 0 4px #c084fc); } 
+                94%, 98% { opacity: 0.4; } 
+              }
+            `}
+          </style>
+
           <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="4" dy="8" stdDeviation="5" floodColor="#000" floodOpacity="0.55"/>
           </filter>
@@ -210,18 +231,9 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
             <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
           </filter>
 
-          <radialGradient id="tree-base" cx="40%" cy="40%" r="60%">
-            <stop offset="0%" stopColor="#2b591b" />
-            <stop offset="100%" stopColor="#15330a" />
-          </radialGradient>
-          <radialGradient id="tree-mid" cx="35%" cy="35%" r="60%">
-            <stop offset="0%" stopColor="#437827" />
-            <stop offset="100%" stopColor="#224710" />
-          </radialGradient>
-          <radialGradient id="tree-highlight" cx="30%" cy="30%" r="50%">
-            <stop offset="0%" stopColor="#67ad40" />
-            <stop offset="100%" stopColor="#3c731e" />
-          </radialGradient>
+          <filter id="heavy-blur"><feGaussianBlur stdDeviation="10" /></filter>
+          <filter id="med-blur"><feGaussianBlur stdDeviation="5" /></filter>
+          <filter id="light-blur"><feGaussianBlur stdDeviation="2" /></filter>
 
           <pattern id="checkers" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
             <rect width="10" height="10" fill="#ffffff" />
@@ -230,96 +242,31 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
             <rect x="10" y="10" width="10" height="10" fill="#ffffff" />
           </pattern>
           
-          <pattern id="wood-log" x="0" y="0" width="20" height="80" patternUnits="userSpaceOnUse">
-            <rect width="20" height="80" fill="#8a5c3e" />
-            <path d="M 0 10 Q 10 15 20 5 M 0 30 Q 10 25 20 35 M 0 50 Q 10 55 20 45 M 0 70 Q 10 65 20 75" stroke="#4a2e1d" strokeWidth="2.5" fill="none" opacity="0.8" />
-            <path d="M 5 0 L 5 80 M 15 0 L 15 80" stroke="#5c3823" strokeWidth="1" fill="none" opacity="0.5"/>
-          </pattern>
-          
-          <pattern id="day-grass" x="0" y="0" width="120" height="120" patternUnits="userSpaceOnUse">
-            <rect width="120" height="120" fill="#7ba342" />
-            <circle cx="30" cy="30" r="45" fill="#698f36" opacity="0.7" />
-            <circle cx="90" cy="90" r="55" fill="#89b54c" opacity="0.6" />
-          </pattern>
-          
-          <pattern id="dirt-track" x="0" y="0" width="120" height="120" patternUnits="userSpaceOnUse">
-            <rect width="120" height="120" fill="#a67c58" />
-            <path d="M 0 25 C 40 10, 80 50, 120 25" stroke="#855f41" strokeWidth="6" fill="none" opacity="0.7" />
-            <path d="M 0 85 C 50 110, 60 60, 120 85" stroke="#855f41" strokeWidth="5" fill="none" opacity="0.7" />
-            <path d="M 30 0 L 50 40 L 20 80 L 60 120" stroke="#755236" strokeWidth="3" fill="none" opacity="0.5" />
-            <circle cx="25" cy="95" r="4" fill="#5c3f29" opacity="0.9"/>
-            <circle cx="95" cy="35" r="5" fill="#694a32" opacity="0.8"/>
-            <circle cx="70" cy="70" r="2.5" fill="#4a311f" opacity="0.9"/>
-            <circle cx="15" cy="45" r="2" fill="#8c6b50" opacity="0.8"/>
+          <pattern id="warning-stripes" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="20" height="20" fill="#fbbf24" />
+            <rect width="10" height="20" fill="#1c1917" />
           </pattern>
 
-          <radialGradient id="water-grad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#38bdf8" />
-            <stop offset="70%" stopColor="#0284c7" />
-            <stop offset="100%" stopColor="#0369a1" />
-          </radialGradient>
+          <pattern id="day-grass" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+            <rect width="80" height="80" fill="#ced873" />
+            <path d="M10,20 l5,-10 M20,40 l6,-12 M30,60 l4,-8 M40,80 l5,-10 M50,10 l6,-12 M60,30 l4,-8 M70,50 l5,-10 M80,70 l6,-12" stroke="#b9c656" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.8"/>
+            <path d="M5,15 l-4,-8 M15,35 l-5,-10 M25,55 l-4,-8 M35,75 l-5,-10 M45,5 l-4,-8 M55,25 l-5,-10 M65,45 l-4,-8 M75,65 l-5,-10" stroke="#a7b340" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.6"/>
+            <path d="M15,25 l3,-6 M25,45 l4,-8 M35,65 l3,-6 M45,15 l4,-8 M55,35 l3,-6 M65,55 l4,-8 M75,75 l3,-6" stroke="#e1ea8d" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.9"/>
+          </pattern>
+          
+          <pattern id="dirt-track" x="0" y="0" width="100" height="40" patternUnits="userSpaceOnUse">
+            <rect width="100" height="40" fill="#d29864" />
+            <path d="M 0 10 Q 25 15, 50 10 T 100 10 M 0 30 Q 25 35, 50 30 T 100 30" stroke="#c08252" strokeWidth="2" fill="none" />
+            <path d="M 0 20 Q 25 25, 50 20 T 100 20" stroke="#b47444" strokeWidth="1.5" fill="none" opacity="0.6" />
+          </pattern>
+
+          <pattern id="stone-grid" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+            <rect width="20" height="20" fill="#9ca3af" />
+            <path d="M 20 0 L 20 20 L 0 20" fill="none" stroke="#4b5563" strokeWidth="1" />
+          </pattern>
         </defs>
 
         <rect width="1200" height="500" fill="url(#day-grass)" filter="url(#inset-shadow)" />
-
-        <g filter="url(#drop-shadow)">
-          <path d="M 450 250 C 420 170, 520 180, 600 180 C 680 180, 780 170, 750 250 C 720 330, 680 320, 600 320 C 520 320, 480 330, 450 250 Z" fill="#5b402c" opacity="0.8"/>
-          <path d="M 460 250 C 435 185, 525 190, 600 190 C 675 190, 765 185, 740 250 C 715 315, 675 310, 600 310 C 525 310, 485 315, 460 250 Z" fill="url(#water-grad)" opacity="0.95"/>
-        </g>
-
-        <Tree cx="90" cy="60" r="75" />
-        <Tree cx="180" cy="40" r="55" />
-        <Tree cx="1110" cy="110" r="85" />
-        <Tree cx="1130" cy="240" r="60" />
-        <Tree cx="70" cy="440" r="85" />
-        <Tree cx="1140" cy="420" r="75" />
-        <Tree cx="1030" cy="460" r="50" />
-        <Tree cx="40" cy="250" r="65" />
-        
-        <Tree cx="850" cy="250" r="65" />
-        <Tree cx="350" cy="250" r="60" />
-
-        <GardenBed cx="225" cy="75" rx="55" ry="35" rot="15" />
-        <Flower cx="200" cy="70" color="Blue" scale={0.45} rot={15} />
-        <Flower cx="240" cy="55" color="Blue" scale={0.35} rot={-20} />
-        <Flower cx="190" cy="100" color="Gold" scale={0.4} rot={45} />
-        <Flower cx="250" cy="90" color="Gold" scale={0.3} rot={-10} />
-
-        <GardenBed cx="960" cy="70" rx="65" ry="35" rot="-10" />
-        <Flower cx="940" cy="60" color="Red" scale={0.5} rot={-10} />
-        <Flower cx="980" cy="85" color="Red" scale={0.4} rot={30} />
-        <Flower cx="910" cy="85" color="Black" scale={0.45} rot={15} />
-        <Flower cx="1000" cy="60" color="Black" scale={0.35} rot={-25} />
-
-        <GardenBed cx="235" cy="425" rx="60" ry="35" rot="20" />
-        <Flower cx="220" cy="420" color="Green" scale={0.45} rot={25} />
-        <Flower cx="270" cy="445" color="Green" scale={0.5} rot={-15} />
-        <Flower cx="190" cy="400" color="Gold" scale={0.35} rot={5} />
-        <Flower cx="250" cy="400" color="Blue" scale={0.4} rot={-30} />
-
-        <GardenBed cx="960" cy="435" rx="60" ry="35" rot="-15" />
-        <Flower cx="950" cy="430" color="Black" scale={0.55} rot={-20} />
-        <Flower cx="910" cy="455" color="Blue" scale={0.4} rot={10} />
-        <Flower cx="990" cy="410" color="Blue" scale={0.45} rot={45} />
-        <Flower cx="995" cy="455" color="Red" scale={0.35} rot={15} />
-
-        <GardenBed cx="440" cy="170" rx="45" ry="25" rot="-25" />
-        <Flower cx="430" cy="165" color="Gold" scale={0.45} rot={-10} />
-        <Flower cx="460" cy="180" color="Green" scale={0.35} rot={20} />
-        <Flower cx="415" cy="185" color="Red" scale={0.4} rot={45} />
-
-        <GardenBed cx="740" cy="165" rx="40" ry="20" rot="15" />
-        <Flower cx="730" cy="170" color="Gold" scale={0.4} rot={10} />
-        <Flower cx="760" cy="155" color="Red" scale={0.45} rot={-25} />
-
-        <GardenBed cx="430" cy="330" rx="50" ry="25" rot="-15" />
-        <Flower cx="430" cy="320" color="Blue" scale={0.5} rot={-15} />
-        <Flower cx="400" cy="335" color="Blue" scale={0.35} rot={20} />
-        <Flower cx="460" cy="340" color="Green" scale={0.45} rot={5} />
-
-        <GardenBed cx="760" cy="325" rx="45" ry="25" rot="20" />
-        <Flower cx="750" cy="335" color="Black" scale={0.45} rot={15} />
-        <Flower cx="780" cy="315" color="Red" scale={0.4} rot={-10} />
 
         {/* Track Base */}
         <path d="M 250 100 L 950 100 A 150 150 0 0 1 950 400 L 250 400 A 150 150 0 0 1 250 100 Z" fill="none" stroke="#4a3121" strokeWidth="94" strokeLinecap="square" opacity="0.8" filter="url(#drop-shadow)"/>
@@ -341,63 +288,79 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
            <rect x="230" y="60" width="40" height="80" fill="none" stroke="#1c1917" strokeWidth="3" />
         </g>
 
-        <g filter="url(#drop-shadow)">
-          <rect x="594" y="64" width="20" height="80" fill="#3b2314" />
-          <rect x="590" y="60" width="20" height="80" fill="url(#wood-log)" />
-          <rect x="804" y="364" width="20" height="80" fill="#3b2314" />
-          <rect x="800" y="360" width="20" height="80" fill="url(#wood-log)" />
-          <rect x="594" y="364" width="20" height="80" fill="#3b2314" />
-          <rect x="590" y="360" width="20" height="80" fill="url(#wood-log)" />
-          <rect x="384" y="364" width="20" height="80" fill="#3b2314" />
-          <rect x="380" y="360" width="20" height="80" fill="url(#wood-log)" />
+        {/* Jump Markers */}
+        <JumpMarker cx={600} cy={60} difficulty={10} />  
+        <JumpMarker cx={810} cy={360} difficulty={10} /> 
+        <JumpMarker cx={600} cy={360} difficulty={15} /> 
+        <JumpMarker cx={390} cy={360} difficulty={10} /> 
+
+        {/* Embedded UI Segment Labels */}
+        <TrackLabel cx={600} cy={35} text="10 JUMP" colorCode="#fcd34d" />
+        <TrackLabel cx={810} cy={465} text="10 JUMP" colorCode="#fcd34d" />
+        <TrackLabel cx={600} cy={465} text="15 JUMP" colorCode="#f87171" />
+        <TrackLabel cx={390} cy={465} text="10 JUMP" colorCode="#fcd34d" />
+
+        {/* --- CENTERPIECE STATUE & EFFECTS --- */}
+        <g className="statue-centerpiece">
+          <g transform="translate(600, 280) scale(1, 0.4)">
+            <circle cx="0" cy="0" r="100" fill="#f97316" filter="url(#heavy-blur)" opacity="0.7" className="fire-pulse" />
+            <circle cx="0" cy="0" r="85" fill="none" stroke="#ef4444" strokeWidth="10" filter="url(#med-blur)" className="fire-spin" />
+            <circle cx="0" cy="0" r="70" fill="none" stroke="#eab308" strokeWidth="5" filter="url(#light-blur)" className="fire-spin-rev" />
+            <circle cx="0" cy="0" r="65" fill="url(#stone-grid)" stroke="#4b5563" strokeWidth="4" />
+            <circle cx="0" cy="0" r="65" fill="none" stroke="#1f2937" strokeWidth="8" opacity="0.6" />
+
+            <g className="lightning-spin" style={{ mixBlendMode: 'screen' }}>
+              <path d="M 0 0 L 15 -25 L 25 -20 L 40 -50 L 55 -45" fill="none" stroke="#a855f7" strokeWidth="5" className="lightning-flash" />
+              <path d="M 0 0 L 15 -25 L 25 -20 L 40 -50 L 55 -45" fill="none" stroke="#ffffff" strokeWidth="2" className="lightning-flash" />
+              <path d="M 0 0 L -20 15 L -40 40 L -65 35" fill="none" stroke="#c084fc" strokeWidth="5" className="lightning-flash" style={{animationDelay: '0.3s'}} />
+              <path d="M 0 0 L 25 15 L 20 40 L 50 60 L 65 45" fill="none" stroke="#d8b4fe" strokeWidth="3" className="lightning-flash" style={{animationDelay: '0.6s'}} />
+              <path d="M 0 0 L -20 -25 L -50 -40 L -65 -70" fill="none" stroke="#a855f7" strokeWidth="5" className="lightning-flash" style={{animationDelay: '0.9s'}} />
+            </g>
+          </g>
+
+          <image 
+            href={assetUrl('/images/characters/Reinhart_Statue.webp')} 
+            x="530" 
+            y="125" 
+            width="140" 
+            height="170" 
+            preserveAspectRatio="xMidYMid meet" 
+            filter="url(#drop-shadow)"
+          />
         </g>
 
         {/* Floating Localized UI Overlays */}
         {renderFloatingUI(0, r1Coords)}
         {renderFloatingUI(1, r2Coords)}
 
-        {/* Racer 1 Token */}
+        {/* Racer Tokens */}
         <foreignObject 
           x="0" 
           y="0" 
           width="100" 
-          height="100"
-          overflow="visible"
-          style={{ 
-            transform: `translate(${r1Coords.x}px, ${r1Coords.y}px)`, 
-            transition: `transform ${racer1.transitionDuration || 0}ms linear`, 
-            zIndex: activeRacerIndex === 0 ? 10 : 5 
-          }}
+          height="100" 
+          overflow="visible" 
+          style={{ transform: `translate(${r1Coords.x}px, ${r1Coords.y}px)`, transition: `transform ${racer1.transitionDuration || 0}ms linear`, zIndex: activeRacerIndex === 0 ? 10 : 5 }}
         >
           <div className={`relative h-full w-full origin-bottom transition-all duration-300 ${activeRacerIndex === 0 ? 'scale-[1.15]' : 'scale-[0.9] opacity-80 saturate-50'}`}>
             
-            {/* Status & Local Segment Indicator */}
-            {(() => {
-              const localPos1 = getLocalPos(racer1.position);
-              const inTurn = trackData.turns.some(t => localPos1 >= t.start && localPos1 < t.end);
-              return (
-                <>
-                  {activeRacerIndex === 0 && isRunning && (
-                    <div className={`absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-20 h-6 rounded-full blur-md opacity-70 transition-colors duration-500 ${inTurn ? 'bg-rose-500' : 'bg-sky-500'}`} />
-                  )}
-                  {activeRacerIndex === 0 && isRunning && (
-                    <div className={`absolute -bottom-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded border text-[8px] font-mono font-black uppercase tracking-widest whitespace-nowrap transition-colors duration-500 ${inTurn ? 'text-rose-300 border-rose-500/50 bg-rose-950/80' : 'text-sky-300 border-sky-500/50 bg-sky-950/80'}`}>
-                      {inTurn ? 'Turning' : 'Straight'}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-
-            {racer1.isPenalized && (
-               <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex h-6 w-12 items-center justify-center pointer-events-none">
-                  <div className="relative w-full h-full animate-[spin_2s_linear_infinite]">
-                     <span className="absolute top-0 right-0 text-xl drop-shadow-md">⭐</span>
-                     <span className="absolute bottom-0 left-0 text-xl drop-shadow-md">⭐</span>
+            {racer1.striderStacks > 0 && (
+               <div className="absolute -top-20 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
+                  <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
+                     <span className="absolute top-0 right-0 text-xl drop-shadow-[0_0_12px_#38bdf8] font-black text-sky-400">💨{racer1.striderStacks}</span>
                   </div>
                </div>
             )}
-
+            
+            {racer1.isResilient && (
+               <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
+                  <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
+                     <span className="absolute top-0 right-0 text-2xl drop-shadow-[0_0_12px_#ea580c]">🛡️</span>
+                     <span className="absolute bottom-0 left-0 text-2xl drop-shadow-[0_0_12px_#ea580c]">🛡️</span>
+                  </div>
+               </div>
+            )}
+            
             {racer1.hasAdvantage && (
                <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
                   <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
@@ -406,60 +369,53 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
                   </div>
                </div>
             )}
-
-            {/* Mount Rendering */}
-            <img 
-              src={assetUrl(racer1.imagePath)} 
-              alt={racer1.name} 
-              className="absolute bottom-0 left-0 z-10 h-full w-full object-contain object-bottom drop-shadow-[0_15px_20px_rgba(0,0,0,1)]"
-              style={{ transform: `scaleX(${getMountScaleX(racer1, r1Coords)})` }}
-              draggable={false} 
-            />
-          </div>
-        </foreignObject>
-        
-        {/* Racer 2 Token */}
-        <foreignObject 
-          x="0" 
-          y="0" 
-          width="100" 
-          height="100"
-          overflow="visible"
-          style={{ 
-            transform: `translate(${r2Coords.x}px, ${r2Coords.y}px)`, 
-            transition: `transform ${racer2.transitionDuration || 0}ms linear`, 
-            zIndex: activeRacerIndex === 1 ? 10 : 5 
-          }}
-        >
-          <div className={`relative h-full w-full origin-bottom transition-all duration-300 ${activeRacerIndex === 1 ? 'scale-[1.15]' : 'scale-[0.9] opacity-80 saturate-50'}`}>
-             
-             {/* Status & Local Segment Indicator */}
-             {(() => {
-              const localPos2 = getLocalPos(racer2.position);
-              const inTurn = trackData.turns.some(t => localPos2 >= t.start && localPos2 < t.end);
-              return (
-                <>
-                  {activeRacerIndex === 1 && isRunning && (
-                    <div className={`absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-20 h-6 rounded-full blur-md opacity-70 transition-colors duration-500 ${inTurn ? 'bg-rose-500' : 'bg-sky-500'}`} />
-                  )}
-                  {activeRacerIndex === 1 && isRunning && (
-                    <div className={`absolute -bottom-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded border text-[8px] font-mono font-black uppercase tracking-widest whitespace-nowrap transition-colors duration-500 ${inTurn ? 'text-rose-300 border-rose-500/50 bg-rose-950/80' : 'text-sky-300 border-sky-500/50 bg-sky-950/80'}`}>
-                      {inTurn ? 'Turning' : 'Straight'}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-
-             {racer2.isPenalized && (
+            
+            {racer1.isPenalized && (
                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex h-6 w-12 items-center justify-center pointer-events-none">
                   <div className="relative w-full h-full animate-[spin_2s_linear_infinite]">
                      <span className="absolute top-0 right-0 text-xl drop-shadow-md">⭐</span>
                      <span className="absolute bottom-0 left-0 text-xl drop-shadow-md">⭐</span>
                   </div>
                </div>
-             )}
-
+            )}
+            
+            <img 
+               src={assetUrl(racer1.imagePath)} 
+               alt={racer1.name} 
+               className="absolute bottom-0 left-0 z-10 h-full w-full object-contain object-bottom drop-shadow-[0_15px_20px_rgba(0,0,0,1)]" 
+               style={{ transform: `scaleX(${getMountScaleX(racer1, r1Coords)})` }} 
+               draggable={false} 
+            />
+          </div>
+        </foreignObject>
+        
+        <foreignObject 
+          x="0" 
+          y="0" 
+          width="100" 
+          height="100" 
+          overflow="visible" 
+          style={{ transform: `translate(${r2Coords.x}px, ${r2Coords.y}px)`, transition: `transform ${racer2.transitionDuration || 0}ms linear`, zIndex: activeRacerIndex === 1 ? 10 : 5 }}
+        >
+          <div className={`relative h-full w-full origin-bottom transition-all duration-300 ${activeRacerIndex === 1 ? 'scale-[1.15]' : 'scale-[0.9] opacity-80 saturate-50'}`}>
+            
+            {racer2.striderStacks > 0 && (
+               <div className="absolute -top-20 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
+                  <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
+                     <span className="absolute top-0 right-0 text-xl drop-shadow-[0_0_12px_#38bdf8] font-black text-sky-400">💨{racer2.striderStacks}</span>
+                  </div>
+               </div>
+            )}
+            
+            {racer2.isResilient && (
+               <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
+                  <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
+                     <span className="absolute top-0 right-0 text-2xl drop-shadow-[0_0_12px_#ea580c]">🛡️</span>
+                     <span className="absolute bottom-0 left-0 text-2xl drop-shadow-[0_0_12px_#ea580c]">🛡️</span>
+                  </div>
+               </div>
+            )}
+            
             {racer2.hasAdvantage && (
                <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-30 flex h-8 w-16 items-center justify-center pointer-events-none">
                   <div className="relative w-full h-full animate-[pulse_0.8s_ease-in-out_infinite]">
@@ -468,14 +424,22 @@ export default function RaceBoard({ racer1, racer2, r1Coords, r2Coords, activeRa
                   </div>
                </div>
             )}
-
-            {/* Mount Rendering */}
+            
+            {racer2.isPenalized && (
+               <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex h-6 w-12 items-center justify-center pointer-events-none">
+                  <div className="relative w-full h-full animate-[spin_2s_linear_infinite]">
+                     <span className="absolute top-0 right-0 text-xl drop-shadow-md">⭐</span>
+                     <span className="absolute bottom-0 left-0 text-xl drop-shadow-md">⭐</span>
+                  </div>
+               </div>
+            )}
+            
             <img 
-              src={assetUrl(racer2.imagePath)} 
-              alt={racer2.name} 
-              className="absolute bottom-0 left-0 z-10 h-full w-full object-contain object-bottom drop-shadow-[0_15px_20px_rgba(0,0,0,1)]"
-              style={{ transform: `scaleX(${getMountScaleX(racer2, r2Coords)})` }}
-              draggable={false} 
+               src={assetUrl(racer2.imagePath)} 
+               alt={racer2.name} 
+               className="absolute bottom-0 left-0 z-10 h-full w-full object-contain object-bottom drop-shadow-[0_15px_20px_rgba(0,0,0,1)]" 
+               style={{ transform: `scaleX(${getMountScaleX(racer2, r2Coords)})` }} 
+               draggable={false} 
             />
           </div>
         </foreignObject>
@@ -495,16 +459,37 @@ export const MOUNTS = {
     skins: [
       { id: 'default', name: 'Tauros', buttonLabel: 'Default', imagePath: '/images/mounts/Tauros.webp', facing: 'Left' },
       { id: 'college', name: 'Tauros', buttonLabel: 'College', imagePath: '/images/mounts/Tauros_College.webp', facing: 'Left' },
-      { id: 'yoked', name: 'Tauros', buttonLabel: 'Yoked', imagePath: '/images/mounts/Tauros_Yoked.webp', facing: 'Left' }
+      { id: 'yoked', name: 'Tauros', buttonLabel: 'Yoked', imagePath: '/images/mounts/Tauros_Yoked.webp', facing: 'Right' }
     ],
     baseStats: { speed: 20, jump: 15, turning: 15 } 
   },
-  wolf: { // Replaced Doduo
-    id: 'wolf', 
+  goraffe: { 
+    id: 'goraffe', 
     skins: [
-      { id: 'default', name: 'Wolf', buttonLabel: 'Default', imagePath: '/images/mounts/Werewolf.webp', facing: 'Left' }
+      { id: 'default', name: 'Throat Goat', buttonLabel: 'Default', imagePath: '/images/mounts/Goraffe.webp', facing: 'Left' }
     ],
-    baseStats: { speed: 24, jump: 18, turning: 8 } 
+    baseStats: { speed: 24, jump: 16, turning: 8 } 
+  },
+  warhog: { 
+    id: 'warhog', 
+    skins: [
+      { id: 'default', name: 'Warhog', buttonLabel: 'Default', imagePath: '/images/mounts/Warhog.webp', facing: 'Left' }
+    ],
+    baseStats: { speed: 18, jump: 10, turning: 20 } 
+  },
+  tunnel_viper: { 
+    id: 'tunnel_viper', 
+    skins: [
+      { id: 'default', name: 'Tunnel Viper', buttonLabel: 'Default', imagePath: '/images/mounts/TunnelViper.webp', facing: 'Right' }
+    ],
+    baseStats: { speed: 20, jump: 6, turning: 23 } 
+  },
+  perseus: { 
+    id: 'perseus', 
+    skins: [
+      { id: 'default', name: 'Perseus', buttonLabel: 'Default', imagePath: '/images/mounts/Perseus.webp', facing: 'Left' }
+    ],
+    baseStats: { speed: 17, jump: 18, turning: 17 } 
   },
   buoffolaunt: { 
     id: 'buoffolaunt', 
@@ -523,6 +508,7 @@ export const MOUNTS = {
     baseStats: { speed: 17, jump: 10, turning: 23 } 
   },
   bolt_bison: { 
+    // Player's Beefcake is preserved, but removed from AI generation pool
     id: 'bolt_bison', 
     skins: [
       { id: 'default', name: 'Bolt Bison', buttonLabel: 'Default', imagePath: '/images/mounts/BoltBison.webp', facing: 'Left' },
@@ -541,17 +527,22 @@ export const MOUNTS = {
 
 // Player's Wager Circuit Roster
 export const PLAYER_PRESETS = [
-  { id: 'plum', mountId: 'buoffolaunt', skinId: 'plum', label: 'Plum (Lvl 5)', speed: 24, jump: 12, turning: 15, level: 5, wins: 4, losses: 2, passive: 'headstrong' },
-  { id: 'fudgedale', mountId: 'mudsdale', skinId: 'fudgedale', label: 'Fudgedale (Lvl 4)', speed: 19, jump: 8, turning: 26, level: 4, wins: 2, losses: 1, passive: 'none' },
-  { id: 'beefcake', mountId: 'bolt_bison', skinId: 'beefcake', label: 'Beefcake (Lvl 1)', speed: 25, jump: 16, turning: 13, level: 1, wins: 0, losses: 1, passive: 'super_charged' }
+  { id: 'plum', mountId: 'buoffolaunt', skinId: 'plum', label: 'Plum (Lvl 5)', speed: 24, jump: 12, turning: 15, level: 5, wins: 4, losses: 2, passives: ['headstrong'] },
+  { id: 'fudgedale', mountId: 'mudsdale', skinId: 'fudgedale', label: 'Fudgedale (Lvl 4)', speed: 19, jump: 8, turning: 26, level: 4, wins: 2, losses: 1, passives: [] },
+  { id: 'beefcake', mountId: 'bolt_bison', skinId: 'beefcake', label: 'Beefcake (Lvl 1)', speed: 25, jump: 16, turning: 13, level: 1, wins: 0, losses: 1, passives: ['super_charged'] }
 ];
 
 export const AVAILABLE_PASSIVES = [
-  { id: 'none', label: 'None', desc: 'No special abilities.' },
   { id: 'headstrong', label: 'Headstrong', desc: 'First failed jump does not result in a crash/daze.' },
   { id: 'super_charged', label: 'Super Charged', desc: 'Rolling a 1 grants advantage on the next roll.' },
   { id: 'corner_demon', label: 'Corner Demon', desc: 'Advantage on first turn.' },
-  { id: 'jumper', label: 'Jumper', desc: 'Advantage on first jump.' }
+  { id: 'jumper', label: 'Jumper', desc: 'Advantage on first jump.' },
+  { id: 'resilient', label: 'Resilient', desc: 'Gain +1 to all dice rolls when behind by 3 or more spaces at the start of the turn.' },
+  { id: 'strider', label: 'Strider', desc: '+1 to speed rolls, stacking each consecutive speed roll. Resets on failed jump or hitting a turn.' },
+  { id: 'strong_finisher', label: 'Strong Finisher', desc: '+2 to all turn rolls on the final turn of the track.' },
+  { id: 'tunneling', label: 'Tunneling', desc: 'Automatically passes the first jump of the race.' },
+  { id: 'winged', label: 'Winged', desc: 'Gain an extra 1d2 distance upon successfully clearing a jump.' },
+  { id: 'soar', label: 'Soar', desc: 'Advantage on speed rolls while in first place.' }
 ];
 
 // -----------------------------------------------------------------------------
@@ -571,18 +562,48 @@ export const rollNatureModifier = () => {
   return -rollDie(6);
 };
 
-export const generateOpponent = (index) => {
-  const level = rollDie(5);
-  const speciesKeys = Object.keys(MOUNTS);
-  const speciesId = speciesKeys[Math.floor(Math.random() * speciesKeys.length)];
+export const generateOpponent = (index, isAce = false) => {
+  let level;
+  if (isAce) {
+    level = Math.random() < 0.10 ? 6 : 5;
+  } else {
+    const lr = Math.random();
+    if (lr < 0.20) level = 2;
+    else if (lr < 0.50) level = 3;
+    else if (lr < 0.80) level = 4;
+    else level = 5;
+  }
+
+  // Tiered Rarity Pool Generation
+  const rarityRoll = Math.random();
+  let speciesPool = [];
+  
+  if (rarityRoll < 0.60) {
+     speciesPool = ['tauros', 'harehorse']; // 60% Common
+  } else if (rarityRoll < 0.90) {
+     speciesPool = ['goraffe', 'mudsdale', 'warhog']; // 30% Uncommon
+  } else {
+     speciesPool = ['buoffolaunt', 'tunnel_viper', 'perseus']; // 10% Rare
+  }
+  
+  const speciesId = speciesPool[Math.floor(Math.random() * speciesPool.length)];
   const base = MOUNTS[speciesId];
   
-  // AI only uses default stock skins
-  const skin = base.skins.find(s => s.id === 'default') || base.skins[0];
+  let skinId = 'default';
+  if (speciesId === 'tauros') {
+    if (level <= 2) skinId = 'college';
+    else if (level <= 4) skinId = 'default';
+    else if (level >= 5) skinId = 'yoked';
+  }
+  const skin = base.skins.find(s => s.id === skinId) || base.skins[0];
 
-  const spdMod = rollNatureModifier();
-  const jmpMod = rollNatureModifier();
-  const trnMod = rollNatureModifier();
+  let spdMod, jmpMod, trnMod, natureSum;
+  do {
+    spdMod = rollNatureModifier();
+    jmpMod = rollNatureModifier();
+    trnMod = rollNatureModifier();
+    natureSum = spdMod + jmpMod + trnMod;
+  } while (isAce && natureSum < 0);
 
   let stats = {
     speed: Math.max(1, base.baseStats.speed + spdMod),
@@ -590,7 +611,6 @@ export const generateOpponent = (index) => {
     turning: Math.max(1, base.baseStats.turning + trnMod)
   };
 
-  // Level Up Stats
   for (let i = 2; i <= level; i++) {
     const r = rollDie(3);
     if (r === 1) stats.speed++;
@@ -598,16 +618,23 @@ export const generateOpponent = (index) => {
     else stats.turning++;
   }
 
-  // Assign Special Level 5 Passives
-  let passive = 'none';
-  if (level === 5) {
-    if (speciesId === 'harehorse') passive = 'jumper';
-    if (speciesId === 'mudsdale') passive = 'corner_demon';
-    if (speciesId === 'buoffolaunt') passive = 'headstrong';
+  let passives = [];
+  
+  // Base Passives mapped to Level 1
+  if (speciesId === 'perseus') passives.push('winged'); 
+  
+  // Level 5 Ace Passives
+  if (level >= 5) {
+    if (speciesId === 'harehorse') passives.push('jumper');
+    if (speciesId === 'mudsdale') passives.push('corner_demon');
+    if (speciesId === 'buoffolaunt') passives.push('headstrong');
+    if (speciesId === 'tauros') passives.push('resilient'); 
+    if (speciesId === 'goraffe') passives.push('strider'); 
+    if (speciesId === 'warhog') passives.push('strong_finisher'); 
+    if (speciesId === 'tunnel_viper') passives.push('tunneling'); 
+    if (speciesId === 'perseus') passives.push('jumper'); 
   }
 
-  // Record generation based on stats spread
-  const natureSum = spdMod + jmpMod + trnMod;
   let winRateBase = 0.5;
   if (natureSum >= 3) winRateBase = 0.65 + (Math.random() * 0.1);
   else if (natureSum <= -3) winRateBase = 0.25 + (Math.random() * 0.1);
@@ -617,7 +644,7 @@ export const generateOpponent = (index) => {
   const variance = baseRaces * 0.2;
   const totalRaces = Math.max(1, Math.floor(baseRaces + (Math.random() * variance * 2) - variance));
   const wins = Math.round(totalRaces * winRateBase);
-  const losses = totalRaces - wins;
+  const losses = Math.max(0, totalRaces - wins);
 
   return {
     id: `opp_${index}_${Math.random().toString(36).substr(2, 5)}`,
@@ -629,7 +656,8 @@ export const generateOpponent = (index) => {
     stats,
     wins,
     losses,
-    passive
+    passives,
+    isAce
   };
 };
 </file>
@@ -714,6 +742,7 @@ const rollDice = (max) => Math.floor(Math.random() * max) + 1;
 export function useRaceEngine(initialRacers) {
   const [gameSpeed, setGameSpeed] = useState(1);
   const [activeRacerIndex, setActiveRacerIndex] = useState(0);
+  const [currentTurn, setCurrentTurn] = useState(1);
   const [isFinished, setIsFinished] = useState(false);
   const [winner, setWinner] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -732,14 +761,28 @@ export function useRaceEngine(initialRacers) {
       headstrongUsed: false,
       cornerDemonUsed: false,
       jumperUsed: false,
+      tunnelingUsed: false,
+      strongFinisherLogged: false,
       hasAdvantage: false,
       isPenalized: false,
-      transitionDuration: 0
+      isResilient: false,
+      striderStacks: 0,
+      transitionDuration: 0,
+      passives: r.passives || []
     }))
   );
 
   const addLog = useCallback((msg) => setLogs((prev) => [...prev, msg]), []);
   const sleep = useCallback((ms) => new Promise(resolve => setTimeout(resolve, ms / gameSpeed)), [gameSpeed]);
+
+  const evaluateRoll = (stat, hasAdvantage, flatBonus = 0) => {
+    const r1 = rollDice(stat) + flatBonus;
+    if (hasAdvantage) {
+       const r2 = rollDice(stat) + flatBonus;
+       return { value: Math.max(r1, r2), rolls: [r1, r2] };
+    }
+    return { value: r1, rolls: [r1] };
+  };
 
   const executeInitiative = useCallback(async () => {
     if (busy) return;
@@ -751,7 +794,6 @@ export function useRaceEngine(initialRacers) {
     addLog(getBark('start', ''));
     await sleep(1500);
 
-    // Static Tie check. Only roll if their base jump stat is identical.
     if (r1Jump !== r2Jump) {
       const winnerIdx = r1Jump > r2Jump ? 0 : 1;
       const loserIdx = winnerIdx === 0 ? 1 : 0;
@@ -764,13 +806,11 @@ export function useRaceEngine(initialRacers) {
       return;
     }
 
-    // Tie Breaker Loop
     let r1Roll = 0;
     let r2Roll = 0;
 
     addLog("It's a dead heat at the line! Proceeding to a Jump Roll-Off!");
     
-    // Initial display trigger
     setFlash({
       type: 'initiative',
       rolls: [0, 0],
@@ -819,6 +859,7 @@ export function useRaceEngine(initialRacers) {
     const currentRacers = racers.map(r => ({ ...r, racingStats: { ...r.racingStats } }));
     const rIndex = activeRacerIndex;
     const racer = currentRacers[rIndex];
+    const otherRacer = currentRacers[rIndex === 0 ? 1 : 0];
     const stats = racer.racingStats;
     let pos = racer.position;
 
@@ -826,41 +867,72 @@ export function useRaceEngine(initialRacers) {
     if (localPosStart === 0 && pos > 0) localPosStart = TRACK_DATA.length;
 
     const isInTurn = TRACK_DATA.turns.some((t) => localPosStart >= t.start && localPosStart < t.end);
+    const isSpeedRoll = !isInTurn;
     const activeStat = isInTurn ? stats.turning : stats.speed;
     const statName = isInTurn ? 'Turn' : 'Speed';
 
+    // Strider: Hitting a turn resets stacks
+    if (isInTurn) {
+        racer.striderStacks = 0;
+    }
+
+    // Strong Finisher: +2 to Turn rolls in the final turn (125-150)
+    let finalTurnBonus = 0;
+    const isFinalTurn = isInTurn && localPosStart >= 125 && localPosStart < 150;
+    if (isFinalTurn && racer.passives.includes('strong_finisher')) {
+        finalTurnBonus = 2;
+        if (!racer.strongFinisherLogged) {
+            racer.strongFinisherLogged = true;
+            addLog(`STRONG FINISHER! ${racer.name} enters the final stretch with a burst of power!`);
+        }
+    }
+
+    // Resilient
+    let isResilient = false;
+    if (racer.passives.includes('resilient') && racer.position <= otherRacer.position - 3) {
+       isResilient = true;
+       if (!racer.isResilient) {
+           addLog(`RESILIENT! ${racer.name} is trailing and gains a surge of fighting spirit!`);
+       }
+    } else if (racer.isResilient) {
+       addLog(`${racer.name} has closed the gap. Their resilient surge fades!`);
+    }
+    racer.isResilient = isResilient;
+
     let advantageThisRoll = racer.hasAdvantage;
     
-    // Check Corner Demon
-    if (racer.passive === 'corner_demon' && isInTurn && !racer.cornerDemonUsed) {
+    // Corner Demon
+    if (racer.passives.includes('corner_demon') && isInTurn && !racer.cornerDemonUsed) {
       advantageThisRoll = true;
       racer.cornerDemonUsed = true;
       addLog(`${racer.name}'s Corner Demon activates! Advantage going into the turn!`);
     }
 
-    // Reset standard advantage flag if it was used
+    // Soar
+    if (isSpeedRoll && racer.passives.includes('soar') && racer.position >= otherRacer.position) {
+      advantageThisRoll = true;
+      addLog(`SOAR! ${racer.name} rides the winds of first place!`);
+    }
+
     if (advantageThisRoll && racer.hasAdvantage) {
       racer.hasAdvantage = false;
     }
 
-    let roll1 = rollDice(activeStat);
-    let roll2 = null;
-    let movement = roll1;
-    
-    if (advantageThisRoll) {
-       roll2 = rollDice(activeStat);
-       movement = Math.max(roll1, roll2);
+    let striderBonus = 0;
+    if (isSpeedRoll && racer.passives.includes('strider')) {
+        striderBonus = racer.striderStacks || 0;
     }
+    const flatBonus = (isResilient ? 1 : 0) + striderBonus + finalTurnBonus;
 
-    // Check Super Charged (trigger on a final roll of 1)
-    if (movement === 1 && racer.passive === 'super_charged') {
-       racer.hasAdvantage = true;
-       addLog(`SUPER CHARGED! ${racer.name} rolled a 1 and becomes supercharged!`);
+    let { value: movement, rolls: movementRolls } = evaluateRoll(activeStat, advantageThisRoll, flatBonus);
+
+    if (isSpeedRoll && racer.passives.includes('strider')) {
+        racer.striderStacks += 1;
     }
 
     let penaltyApplied = false;
-    
     let barkCat = '';
+    
     if (racer.isPenalized) {
       movement = Math.max(1, Math.floor(movement / 2));
       racer.isPenalized = false;
@@ -870,18 +942,22 @@ export function useRaceEngine(initialRacers) {
       const isHigh = movement >= (activeStat * 0.5);
       barkCat = isInTurn ? (isHigh ? 'turn_high' : 'turn_low') : (isHigh ? 'speed_high' : 'speed_low');
     }
+
+    if (movement === 1 && racer.passives.includes('super_charged')) {
+       racer.hasAdvantage = true;
+       addLog(`SUPER CHARGED! ${racer.name} ${penaltyApplied ? 'struggled recovering from a wipeout' : 'rolled a 1'} and becomes supercharged!`);
+    }
     
     addLog(getBark(barkCat, racer.name));
     
-    // Float roll over head - Pass both rolls if we rolled with advantage
     setFlash({ 
       racerIndex: rIndex, 
       type: 'roll', 
       value: movement, 
-      rolls: roll2 !== null ? [roll1, roll2] : [roll1], 
+      rolls: movementRolls, 
       stat: statName, 
       penaltyApplied, 
-      maxVal: activeStat 
+      maxVal: activeStat + flatBonus
     });
     
     await sleep(1200);
@@ -890,7 +966,6 @@ export function useRaceEngine(initialRacers) {
     let movementRemaining = movement;
     let stoppedEarlyReason = null; 
 
-    // Smooth Segmented Map Movement Loop
     const baseStepDuration = 60 / gameSpeed;
     const speedMultiplier = movement < 5 ? (5 - movement) * 0.5 + 1 : 1; 
     const stepDuration = baseStepDuration * speedMultiplier;
@@ -945,9 +1020,26 @@ export function useRaceEngine(initialRacers) {
         const jumpDiff = TRACK_DATA.jumps[localPosForJump];
         await sleep(300);
 
+        // Tunneling logic: Auto-pass the first jump
+        if (racer.passives.includes('tunneling') && !racer.tunnelingUsed) {
+            racer.tunnelingUsed = true;
+            addLog(`TUNNELING! ${racer.name} burrows flawlessly under the obstacle!`);
+            setFlash({ racerIndex: rIndex, type: 'jump_success', value: 'AUTO', maxVal: stats.jump });
+            await sleep(900);
+            setFlash(null);
+            
+            // Winged logic applied to a successful tunnel bypass
+            if (racer.passives.includes('winged')) {
+               const extraDist = rollDice(2);
+               movementRemaining += extraDist;
+               addLog(`WINGED! ${racer.name} bursts from the tunnel and glides an extra ${extraDist} spaces!`);
+            }
+            continue; 
+        }
+
         let jumpAdvantage = racer.hasAdvantage;
 
-        if (racer.passive === 'jumper' && !racer.jumperUsed) {
+        if (racer.passives.includes('jumper') && !racer.jumperUsed) {
           jumpAdvantage = true;
           racer.jumperUsed = true;
           addLog(`${racer.name}'s Jumper passive activates! Advantage on the jump!`);
@@ -957,27 +1049,20 @@ export function useRaceEngine(initialRacers) {
           racer.hasAdvantage = false;
         }
 
-        let jRoll1 = rollDice(stats.jump);
-        let jRoll2 = null;
-        let jumpRoll = jRoll1;
-        
-        if (jumpAdvantage) {
-           jRoll2 = rollDice(stats.jump);
-           jumpRoll = Math.max(jRoll1, jRoll2);
-        }
+        const { value: jumpRoll, rolls: jumpRolls } = evaluateRoll(stats.jump, jumpAdvantage, isResilient ? 1 : 0);
 
         setFlash({ 
           racerIndex: rIndex, 
           type: 'roll', 
           value: jumpRoll, 
-          rolls: jRoll2 !== null ? [jRoll1, jRoll2] : [jRoll1], 
+          rolls: jumpRolls, 
           stat: 'Jump', 
-          maxVal: stats.jump 
+          maxVal: stats.jump + (isResilient ? 1 : 0)
         });
         
         await sleep(1000);
 
-        if (jumpRoll === 1 && racer.passive === 'super_charged') {
+        if (jumpRoll === 1 && racer.passives.includes('super_charged')) {
            racer.hasAdvantage = true;
            addLog(`SUPER CHARGED! ${racer.name} stumbled on the jump and becomes supercharged!`);
         }
@@ -987,8 +1072,16 @@ export function useRaceEngine(initialRacers) {
           setFlash({ racerIndex: rIndex, type: 'jump_success', value: jumpRoll });
           await sleep(900);
           setFlash(null);
+
+          // Winged logic on standard jump success
+          if (racer.passives.includes('winged')) {
+             const extraDist = rollDice(2);
+             movementRemaining += extraDist;
+             addLog(`WINGED! ${racer.name} glides an extra ${extraDist} spaces after clearing the hazard!`);
+          }
+
         } else {
-          if (racer.passive === 'headstrong' && !racer.headstrongUsed) {
+          if (racer.passives.includes('headstrong') && !racer.headstrongUsed) {
              addLog(`HEADSTRONG! ${racer.name} powers through the hazard without breaking stride!`);
              racer.headstrongUsed = true;
              racer.isPenalized = false; 
@@ -1010,14 +1103,18 @@ export function useRaceEngine(initialRacers) {
       }
     }
 
-    if (stoppedEarlyReason === 'turn_boundary' && movementRemaining >= 5) {
-       addLog(getBark('hard_brake', racer.name));
-       setFlash({ racerIndex: rIndex, type: 'hard_brake', value: movementRemaining });
-       await sleep(1500);
-       setFlash(null);
+    if (stoppedEarlyReason === 'turn_boundary') {
+       racer.striderStacks = 0;
+       if (movementRemaining >= 5) {
+           addLog(getBark('hard_brake', racer.name));
+           setFlash({ racerIndex: rIndex, type: 'hard_brake', value: movementRemaining });
+           await sleep(1500);
+           setFlash(null);
+       }
+    } else if (stoppedEarlyReason === 'crash') {
+       racer.striderStacks = 0;
     }
 
-    // Increment turn count for the current racer
     racer.turnCount = (racer.turnCount || 0) + 1;
 
     if (pos >= MAX_DISTANCE) {
@@ -1027,13 +1124,16 @@ export function useRaceEngine(initialRacers) {
     }
 
     if (!isFinished && pos < MAX_DISTANCE) {
+      if (activeRacerIndex === 1) {
+        setCurrentTurn(t => t + 1);
+      }
       setActiveRacerIndex((prev) => (prev === 0 ? 1 : 0));
     }
 
     setBusy(false);
   }, [activeRacerIndex, isFinished, busy, racers, addLog, sleep, gameSpeed, MAX_DISTANCE]);
 
-  return { racers, activeRacerIndex, logs, isFinished, winner, takeTurn, executeInitiative, busy, flash, trackData: TRACK_DATA, gameSpeed, setGameSpeed, laps };
+  return { racers, activeRacerIndex, logs, isFinished, winner, takeTurn, executeInitiative, busy, flash, trackData: TRACK_DATA, gameSpeed, setGameSpeed, laps, currentTurn };
 }
 </file>
 
@@ -1127,7 +1227,6 @@ function RacerHUD({ racer, racerIndex, isActive, laps, maxPos }) {
         </div>
       </div>
       
-      {/* HUD STATS: Opponent stats are now revealed immediately upon loading the race */}
       <div className="flex w-full flex-col gap-2.5 border-t border-stone-700/60 pt-3">
         <LabeledStat label="Spd" val={racer.racingStats.speed} max={30} colorTheme="sky" />
         <LabeledStat label="Jmp" val={racer.racingStats.jump} max={30} colorTheme="emerald" />
@@ -1138,20 +1237,57 @@ function RacerHUD({ racer, racerIndex, isActive, laps, maxPos }) {
 }
 
 // -----------------------------------------------------------------------------
+// HEAT LEDGER ROW COMPONENT
+// -----------------------------------------------------------------------------
+function HeatLedgerRow({ heat }) {
+  const pWon = heat.winner.id === heat.player.id;
+  const oWon = heat.winner.id === heat.opp.id;
+  const maxP = heat.maxPos || 150;
+
+  const renderRacerInfo = (racer, isWinner) => (
+    <div className="flex flex-col items-center gap-1 w-24">
+       <div className={`relative flex items-end justify-center w-12 h-12 rounded-full border-b-4 ${isWinner ? (racer.isPlayer ? 'border-emerald-500 bg-emerald-950/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'border-rose-500 bg-rose-950/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]') : 'border-stone-700 bg-stone-900 opacity-40 grayscale'} overflow-visible transition-all`}>
+         {isWinner && <span className="absolute -top-3 -right-2 text-xl drop-shadow-md z-10">👑</span>}
+         <img src={assetUrl(racer.imagePath)} className="w-10 h-10 object-contain origin-bottom" style={{transform: racer.isPlayer ? 'none' : 'scaleX(-1)'}} draggable={false} />
+       </div>
+       <div className="flex flex-col items-center w-full mt-0.5">
+         <span className="font-mono text-[10px] font-bold text-stone-200 truncate w-full text-center leading-none mb-1.5">{racer.name}</span>
+         <div className="flex items-center gap-1">
+           <span className="text-[8px] font-mono font-bold text-sky-400 bg-sky-950/40 px-1 py-0.5 rounded border border-sky-900/50 uppercase tracking-widest leading-none">Lv.{racer.level || 1}</span>
+           <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded border uppercase tracking-widest leading-none ${isWinner ? 'text-amber-400 bg-amber-950/40 border-amber-900/50' : 'text-stone-500 bg-stone-900/80 border-stone-700'}`}>Pos:{Math.min(racer.position || 0, maxP)}</span>
+         </div>
+       </div>
+    </div>
+  );
+
+  return (
+    <div className="flex items-center justify-between bg-stone-900/80 border border-stone-700 p-3 sm:px-5 rounded-2xl shadow-inner w-full">
+      <div className="font-mono text-[10px] text-stone-400 font-bold w-12 sm:w-16 text-left tracking-widest uppercase">Heat {heat.heatIndex}</div>
+      <div className="flex items-center gap-2 sm:gap-6">
+        {renderRacerInfo(heat.player, pWon)}
+        <span className="font-mono text-[9px] text-stone-600 font-black italic mb-6">VS</span>
+        {renderRacerInfo(heat.opp, oWon)}
+      </div>
+      <div className={`font-mono text-lg sm:text-xl font-black w-20 sm:w-24 text-right ${heat.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+        {heat.profit >= 0 ? '+' : ''}{formatMoney(heat.profit)}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // CORE RACE VIEW (Single Heat)
 // -----------------------------------------------------------------------------
 function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitState, onNextHeat }) {
-  const { racers, activeRacerIndex, logs, isFinished, winner, takeTurn, executeInitiative, busy, flash, trackData, gameSpeed, setGameSpeed, laps } = useRaceEngine(initialRacers);
+  const { racers, activeRacerIndex, logs, isFinished, winner, takeTurn, executeInitiative, busy, flash, trackData, gameSpeed, setGameSpeed, laps, currentTurn } = useRaceEngine(initialRacers);
 
   const [raceState, setRaceState] = useState('ready');
   const [count, setCount] = useState(3);
-  const [announcerExpanded, setAnnouncerExpanded] = useState(true);
 
   const [racer1, racer2] = racers;
-  const latestLog = logs[logs.length - 1];
   const r1Coords = getRacerCoordinates(racer1.position, 0); 
   const r2Coords = getRacerCoordinates(racer2.position, 1); 
-  const maxPos = trackData.length * laps; // Max track position
+  const maxPos = trackData.length * laps; 
 
   useEffect(() => {
     if (raceState === 'countdown') {
@@ -1176,7 +1312,6 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
     return () => clearTimeout(t);
   }, [raceState, busy, isFinished, takeTurn, gameSpeed]);
 
-  // Math for Circuit Profit Tracking
   const profitThisHeat = isCircuit && winner ? (
     winner.isPlayer && winner.wagerInfo 
       ? (winner.wagerInfo.potential - winner.wagerInfo.amount) 
@@ -1184,17 +1319,25 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
   ) : 0;
   
   const newTotal = isCircuit ? (circuitState.winnings + profitThisHeat) : 0;
-
-  // Determine the positions dynamically for the Victory UI
   const heatWinner = racer1.position >= maxPos ? racer1 : racer2;
-  const heatLoser = racer1.position >= maxPos ? racer2 : racer1;
+
+  const allHeats = isCircuit ? [
+    ...(circuitState.history || []),
+    { heatIndex: circuitState.current, player: racer1, opp: racer2, winner: heatWinner, profit: profitThisHeat, maxPos }
+  ] : [];
 
   const handleFinishAction = () => {
     if (!isCircuit) {
       onAbandon();
       return;
     }
-    onNextHeat(profitThisHeat);
+    onNextHeat({
+      profit: profitThisHeat,
+      player: racer1,
+      opp: racer2,
+      winner: heatWinner,
+      maxPos
+    });
   };
   
   return (
@@ -1204,16 +1347,23 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
       <div className="pointer-events-none fixed -bottom-[5%] -right-[5%] z-0 h-[60vh] w-[60vh] rounded-full bg-rose-600/20 mix-blend-screen blur-[140px]" />
 
       {/* Circuit Header Overlay */}
-      {isCircuit && (
-        <div className="absolute top-0 left-0 w-full z-30 p-4 pointer-events-none flex justify-between px-8">
-          <div className="bg-stone-900/80 border border-stone-800 px-4 py-2 rounded-lg backdrop-blur shadow-xl font-mono text-xs uppercase tracking-widest text-stone-300">
-             Heat <span className="text-amber-400 font-bold">{circuitState.current}</span> / {circuitState.total}
-          </div>
-          <div className="bg-stone-900/80 border border-stone-800 px-4 py-2 rounded-lg backdrop-blur shadow-xl font-mono text-xs uppercase tracking-widest text-stone-300">
-             Current Profit: <span className={`font-black ${circuitState.winnings >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>{formatMoney(circuitState.winnings)}</span>
+      <div className="absolute top-0 left-0 w-full z-30 p-4 pointer-events-none flex justify-between px-8 items-start">
+        <div className="flex flex-col gap-2">
+          {isCircuit && (
+            <div className="bg-stone-900/80 border border-stone-800 px-4 py-2 rounded-lg backdrop-blur shadow-xl font-mono text-xs uppercase tracking-widest text-stone-300 w-max pointer-events-auto">
+               Heat <span className="text-amber-400 font-bold">{circuitState.current}</span> / {circuitState.total}
+            </div>
+          )}
+          <div className="bg-stone-900/80 border border-stone-800 px-4 py-2 rounded-lg backdrop-blur shadow-xl font-mono text-xs uppercase tracking-widest text-stone-300 w-max pointer-events-auto">
+             Turn <span className="text-sky-400 font-bold">{currentTurn}</span>
           </div>
         </div>
-      )}
+        {isCircuit && (
+          <div className="bg-stone-900/80 border border-stone-800 px-4 py-2 rounded-lg backdrop-blur shadow-xl font-mono text-xs uppercase tracking-widest text-stone-300 w-max pointer-events-auto">
+             Current Profit: <span className={`font-black ${circuitState.winnings >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>{formatMoney(circuitState.winnings)}</span>
+          </div>
+        )}
+      </div>
 
       {/* Victory Sequence Popup */}
       {raceState === 'finished' && winner && (
@@ -1231,57 +1381,30 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
                {winner.name} takes the crown!
              </h2>
              
-             <div className="flex flex-col w-full max-w-md gap-4 mb-8 animate-[fadeIn_1s_ease-out_0.8s_both]">
+             <div className="flex flex-col w-full max-w-md mb-6 animate-[fadeIn_1s_ease-out_0.8s_both]">
                
-               {/* Leaderboard Post-Race Positions out of 150 */}
-               <div className="flex items-center justify-between rounded-xl border border-stone-700 bg-stone-900/80 px-8 py-5 shadow-inner w-full mb-4">
-                  <div className="flex flex-col items-center">
-                     <span className="font-serif text-lg font-black text-amber-500 flex items-center gap-1">👑 {heatWinner.name}</span>
-                     <span className="font-mono text-xs text-stone-300">Finish: {Math.min(heatWinner.position, maxPos)} / {maxPos}</span>
-                  </div>
-                  <div className="h-10 w-px bg-stone-700" />
-                  <div className="flex flex-col items-center opacity-80">
-                     <span className="font-serif text-lg font-black text-stone-400">{heatLoser.name}</span>
-                     <span className="font-mono text-xs text-stone-500">DNF: {Math.min(heatLoser.position, maxPos)} / {maxPos}</span>
-                  </div>
-               </div>
-
-               {isCircuit && (
-                 <>
-                   {/* Current Heat Wager Result */}
-                   {winner.isPlayer ? (
-                     <div className="rounded-xl bg-emerald-950/80 border border-emerald-500/50 px-6 py-4 font-mono text-center shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                       <div className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-1">Heat {circuitState.current} Wager Won!</div>
-                       <div className="text-3xl font-black text-emerald-400">+{formatMoney(profitThisHeat)}</div>
-                     </div>
-                   ) : (
-                     <div className="rounded-xl bg-rose-950/80 border border-rose-500/50 px-6 py-4 font-mono text-center shadow-[0_0_30px_rgba(244,63,94,0.3)]">
-                       <div className="text-xs font-bold uppercase tracking-widest text-rose-500 mb-1">Heat {circuitState.current} Wager Lost</div>
-                       <div className="text-3xl font-black text-rose-400">{formatMoney(profitThisHeat)}</div>
-                     </div>
-                   )}
-
-                   {/* Detailed Ledger Receipt */}
-                   <div className="bg-stone-900/90 border border-stone-700 rounded-xl p-5 flex flex-col gap-3 shadow-inner text-left">
-                      <div className="flex justify-between items-center text-xs font-mono uppercase text-stone-400">
-                          <span>Previous Balance:</span>
-                          <span>{formatMoney(circuitState.winnings)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs font-mono uppercase text-stone-400 border-b border-stone-700 pb-3">
-                          <span>Heat {circuitState.current} Result:</span>
-                          <span className={profitThisHeat >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                              {profitThisHeat >= 0 ? '+' : ''}{formatMoney(profitThisHeat)}
-                          </span>
-                      </div>
-                      <div className="flex justify-between items-center pt-1">
-                          <span className="text-sm font-bold font-mono uppercase text-stone-300">New Circuit Total:</span>
-                          <span className={`font-serif text-3xl font-black ${newTotal >= 0 ? 'text-amber-400' : 'text-rose-500'}`}>
-                              {formatMoney(newTotal)}
-                          </span>
-                      </div>
-                   </div>
-                 </>
+               {isCircuit ? (
+                 <div className="w-full">
+                    <h3 className="text-left font-mono text-xs uppercase tracking-widest text-stone-500 border-b border-stone-800 pb-2 mb-3">Circuit Ledger</h3>
+                    <div className="flex flex-col gap-2 w-full max-h-[30vh] overflow-y-auto custom-scrollbar pr-2">
+                       {allHeats.map(heat => <HeatLedgerRow key={heat.heatIndex} heat={heat} />)}
+                    </div>
+                    <div className="flex justify-between items-center pt-4 mt-3 border-t border-stone-800 px-4 bg-stone-950/50 rounded-b-xl">
+                       <span className="text-sm font-bold font-mono uppercase text-stone-400">Total Net Profit:</span>
+                       <span className={`font-serif text-3xl font-black ${newTotal >= 0 ? 'text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]' : 'text-rose-500'}`}>
+                          {formatMoney(newTotal)}
+                       </span>
+                    </div>
+                 </div>
+               ) : (
+                 <div className="flex flex-col rounded-xl border border-stone-700 bg-stone-900/80 shadow-inner w-full overflow-hidden">
+                    <div className="bg-stone-950 py-2 border-b border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-widest">Exhibition Complete</div>
+                    <div className="flex items-center justify-center px-6 py-8">
+                       <span className="font-serif text-3xl font-black text-amber-400">{heatWinner.name} Wins!</span>
+                    </div>
+                 </div>
                )}
+
              </div>
 
              <button onClick={handleFinishAction} className="w-full max-w-md rounded-xl border-2 border-amber-500 bg-amber-500/20 px-8 py-5 font-mono text-lg font-black uppercase tracking-widest text-amber-400 hover:bg-amber-400 hover:text-stone-950 transition-all hover:scale-105 shadow-[0_0_20px_rgba(251,191,36,0.3)] animate-[fadeIn_1s_ease-out_1s_both]">
@@ -1356,22 +1479,16 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
                <button type="button" onClick={onAbandon} className="ml-auto hidden sm:block rounded-lg border border-rose-900/50 bg-rose-950/40 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:bg-rose-500/20">Abandon</button>
             </div>
           </div>
-          <div className={`hidden lg:block shrink-0 transition-all duration-300 ${announcerExpanded ? 'lg:w-[24rem]' : 'lg:w-[20rem]'}`} />
+          <div className="hidden lg:block shrink-0 transition-all duration-300 lg:w-[14rem]" />
         </div>
       </div>
 
-      {/* Cinematic Announcer */}
+      {/* Cinematic Announcer Character Only */}
       {(raceState === 'running' || raceState === 'finished' || raceState === 'initiative') && (
         <div className="pointer-events-none fixed bottom-0 right-0 z-40 flex w-full max-w-full flex-col items-end justify-end pr-3 pb-3 sm:pr-8 sm:pb-6">
-          <div className="relative flex flex-col items-end justify-end lg:flex-row lg:items-end">
-             <div className={`pointer-events-auto relative z-50 mb-2 w-[90vw] animate-[lootPop_0.4s_ease-out_both] rounded-[1.5rem] border-2 border-stone-600 bg-stone-900/95 p-4 sm:px-6 sm:py-5 shadow-[0_20px_40px_rgba(0,0,0,0.9)] backdrop-blur-xl lg:-mr-8 lg:mb-16 ${announcerExpanded ? 'max-w-[22rem] sm:max-w-[24rem]' : 'max-w-[18rem] sm:max-w-[20rem]'}`}>
-               <button onClick={() => setAnnouncerExpanded(!announcerExpanded)} className="absolute -left-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full border-2 border-stone-500 bg-stone-800 text-stone-300 shadow-lg hover:bg-stone-700">
-                 {announcerExpanded ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>}
-               </button>
-               <p className={`font-serif font-bold leading-relaxed text-stone-200 drop-shadow-md transition-all duration-300 ${announcerExpanded ? 'text-lg sm:text-xl lg:text-2xl' : 'text-sm sm:text-base'}`}>{latestLog}</p>
-             </div>
-             <div className={`transition-all duration-500 origin-bottom ${announcerExpanded ? 'scale-100 opacity-100' : 'scale-75 opacity-0 hidden'}`}>
-               <img src={assetUrl('/images/characters/Juri.webp')} alt="Announcer" draggable={false} className="h-32 sm:h-48 lg:h-[26rem] xl:h-[32rem] w-auto object-contain object-bottom drop-shadow-[0_-10px_35px_rgba(0,0,0,0.9)] lg:-mr-6" />
+          <div className="relative flex flex-col items-end justify-end">
+             <div className="transition-all duration-500 origin-bottom animate-[fadeIn_0.5s_ease-out]">
+               <img src={assetUrl('/images/characters/Juri.webp')} alt="Announcer" draggable={false} className="h-24 sm:h-32 lg:h-[18rem] xl:h-[22rem] w-auto object-contain object-bottom drop-shadow-[0_-10px_35px_rgba(0,0,0,0.9)] lg:-mr-6" />
              </div>
           </div>
         </div>
@@ -1382,6 +1499,11 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
         @keyframes fadeIn { 0%{opacity:0} 100%{opacity:1} }
         @keyframes battleShake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-10px,5px)} 40%{transform:translate(10px,-5px)} 60%{transform:translate(-6px,4px)} 80%{transform:translate(6px,-3px)} }
         @keyframes jumpBounce { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-40px) scale(1.05)} }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #44403c; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #57534e; }
       `}} />
     </div>
   );
@@ -1393,6 +1515,7 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
 export default function RaceManager({ racers, track, onAbandon }) {
   const [heatIndex, setHeatIndex] = useState(0);
   const [winnings, setWinnings] = useState(0);
+  const [heatResults, setHeatResults] = useState([]);
   const [showSummary, setShowSummary] = useState(false);
 
   // The critical fix: Detect multi-heat array structure directly
@@ -1404,9 +1527,23 @@ export default function RaceManager({ racers, track, onAbandon }) {
     return <ActiveRaceView key="quick-race" racers={currentRacers} track={track} onAbandon={onAbandon} isCircuit={false} />;
   }
 
-  const handleNextHeat = (profit) => {
-    const newTotal = winnings + profit;
+  const handleNextHeat = (heatData) => {
+    const newTotal = winnings + heatData.profit;
     setWinnings(newTotal);
+    setHeatResults(prev => [...prev, { ...heatData, heatIndex: heatIndex + 1 }]);
+
+    if (!heatData.player.isPractice) {
+       const saved = localStorage.getItem('playerProfiles');
+       if (saved) {
+         const profiles = JSON.parse(saved);
+         const profileIndex = profiles.findIndex(p => p.id === heatData.player.presetId);
+         if (profileIndex > -1) {
+           if (heatData.winner.id === heatData.player.id) profiles[profileIndex].wins += 1;
+           else profiles[profileIndex].losses += 1;
+           localStorage.setItem('playerProfiles', JSON.stringify(profiles));
+         }
+       }
+    }
     
     if (heatIndex + 1 < circuitData.length) {
       setHeatIndex(prev => prev + 1);
@@ -1418,12 +1555,16 @@ export default function RaceManager({ racers, track, onAbandon }) {
   if (showSummary) {
     const isProfit = winnings >= 0;
     return (
-      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-stone-950 text-white p-6 animate-[fadeIn_0.5s_ease-out]">
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-stone-950 text-white p-6 animate-[fadeIn_0.5s_ease-out] overflow-y-auto custom-scrollbar">
          <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(5,5,5,0.9)_0%,rgba(10,10,10,1)_100%)]" />
-         <div className="relative z-10 flex flex-col items-center bg-stone-900 border border-stone-800 p-12 rounded-3xl shadow-2xl w-full max-w-2xl text-center">
+         <div className="relative z-10 flex flex-col items-center bg-stone-900 border border-stone-800 p-8 sm:p-12 rounded-3xl shadow-2xl w-full max-w-2xl text-center my-auto">
            <h1 className="font-serif text-5xl sm:text-6xl font-black text-amber-400 tracking-tighter mb-2">CIRCUIT COMPLETE</h1>
-           <span className="font-mono text-sm text-stone-400 uppercase tracking-widest mb-10">Total Wager Resolution</span>
+           <span className="font-mono text-sm text-stone-400 uppercase tracking-widest mb-8">Total Wager Resolution</span>
            
+           <div className="flex flex-col gap-3 w-full mb-8">
+              {heatResults.map(heat => <HeatLedgerRow key={heat.heatIndex} heat={heat} />)}
+           </div>
+
            <div className={`p-8 rounded-2xl border-4 flex flex-col items-center w-full mb-10 shadow-2xl ${isProfit ? 'bg-emerald-950/30 border-emerald-500/50 shadow-emerald-500/20' : 'bg-rose-950/30 border-rose-500/50 shadow-rose-500/20'}`}>
               <span className={`font-mono text-sm font-bold uppercase tracking-widest mb-2 ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {isProfit ? 'Total Net Profit' : 'Total Net Loss'}
@@ -1433,7 +1574,7 @@ export default function RaceManager({ racers, track, onAbandon }) {
               </span>
            </div>
 
-           <button onClick={onAbandon} className="px-12 py-5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-mono text-lg font-black uppercase tracking-widest rounded-xl transition-all hover:scale-105 border border-stone-600 shadow-xl">
+           <button onClick={onAbandon} className="px-12 py-5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-mono text-lg font-black uppercase tracking-widest rounded-xl transition-all hover:scale-105 border border-stone-600 shadow-xl w-full sm:w-auto">
              Return to Gateway
            </button>
          </div>
@@ -1448,7 +1589,7 @@ export default function RaceManager({ racers, track, onAbandon }) {
       track={track} 
       onAbandon={onAbandon} 
       isCircuit={true}
-      circuitState={{ current: heatIndex + 1, total: circuitData.length, winnings }}
+      circuitState={{ current: heatIndex + 1, total: circuitData.length, winnings, history: heatResults }}
       onNextHeat={handleNextHeat}
     />
   );
@@ -1461,19 +1602,34 @@ import { assetUrl } from '../utils/assets';
 import { MOUNTS, PLAYER_PRESETS, AVAILABLE_PASSIVES, generateOpponent } from '../data/mounts';
 
 export default function RacingSetup({ onBack, onBeginRace }) {
-  const [view, setView] = useState('menu'); // 'menu', 'quick', 'circuit'
+  const [view, setView] = useState('menu'); 
 
-  // QUICK RACE STATE
   const [quickRacers, setQuickRacers] = useState([]);
   const [quickStats, setQuickStats] = useState({});
   const [quickSkins, setQuickSkins] = useState({});
   const [quickPassives, setQuickPassives] = useState({});
 
-  // CIRCUIT STATE
   const [circuitLength, setCircuitLength] = useState(3);
   const [activeTab, setActiveTab] = useState(0);
   const [circuitOpponents, setCircuitOpponents] = useState([]);
   const [heats, setHeats] = useState([]);
+  const [isPractice, setIsPractice] = useState(false);
+  
+  const [playerProfiles, setPlayerProfiles] = useState(() => {
+    const saved = localStorage.getItem('playerProfiles');
+    if (saved) {
+       const parsed = JSON.parse(saved);
+       return parsed.map(p => ({
+          ...p,
+          passives: p.passives || (p.passive && p.passive !== 'none' ? [p.passive] : [])
+       }));
+    }
+    return JSON.parse(JSON.stringify(PLAYER_PRESETS));
+  });
+
+  useEffect(() => {
+    localStorage.setItem('playerProfiles', JSON.stringify(playerProfiles));
+  }, [playerProfiles]);
 
   useEffect(() => {
     if (view === 'circuit') {
@@ -1482,7 +1638,8 @@ export default function RacingSetup({ onBack, onBeginRace }) {
   }, [view]);
 
   const generateCircuitPool = (len) => {
-    const opps = Array.from({length: len}, (_, i) => generateOpponent(i));
+    const aceIndex = Math.floor(Math.random() * len);
+    const opps = Array.from({length: len}, (_, i) => generateOpponent(i, i === aceIndex));
     setCircuitOpponents(opps);
     setHeats(Array.from({length: len}, (_, i) => ({
       index: i,
@@ -1506,19 +1663,18 @@ export default function RacingSetup({ onBack, onBeginRace }) {
     });
   };
 
+  const handleProfileEdit = (profileId, field, value) => {
+    setPlayerProfiles(prev => prev.map(p => p.id === profileId ? { ...p, [field]: value } : p));
+  };
+
   const assignOpponentToHeat = (heatIndex, oppId) => {
     setHeats(prev => prev.map((heat, idx) => {
-      if (idx === heatIndex) {
-        return { ...heat, selectedOppId: oppId };
-      }
-      if (heat.selectedOppId === oppId) {
-         return { ...heat, selectedOppId: null };
-      }
+      if (idx === heatIndex) return { ...heat, selectedOppId: oppId };
+      if (heat.selectedOppId === oppId) return { ...heat, selectedOppId: null };
       return heat;
     }));
   };
 
-  // QUICK RACE LOGIC
   const toggleQuickRacer = (mountId) => {
     setQuickRacers((prev) => {
       if (prev.includes(mountId)) {
@@ -1547,29 +1703,27 @@ export default function RacingSetup({ onBack, onBeginRace }) {
         imagePath: skin.imagePath,
         facing: skin.facing,
         racingStats: quickStats[id],
-        passive: quickPassives[id] || 'none',
+        passives: quickPassives[id] || [],
+        level: 1,
         laps: 1
       };
     });
-    // Flat array sent for Quick Race
     onBeginRace(racers, 'track_a'); 
   };
 
-  // CIRCUIT LOGIC
   const startCircuit = () => {
     const circuitData = heats.map(heat => {
-      const preset = PLAYER_PRESETS.find(p => p.id === heat.presetId);
-      const skin = MOUNTS[preset.mountId].skins.find(s => s.id === preset.skinId);
+      const activeProfile = playerProfiles.find(p => p.id === heat.presetId);
+      const skin = MOUNTS[activeProfile.mountId].skins.find(s => s.id === activeProfile.skinId);
       const opp = circuitOpponents.find(o => o.id === heat.selectedOppId);
 
-      const pTotal = preset.wins + preset.losses;
-      const pW = pTotal > 0 ? preset.wins / pTotal : 0;
-      // Formula unmasked: Now uses actual preset.level
-      const pS = 2.0 + (preset.level * 0.5) + pW; 
+      const pTotal = activeProfile.wins + activeProfile.losses;
+      const pW = pTotal > 0 ? activeProfile.wins / pTotal : 0;
+      const pS = 2.0 + (activeProfile.level * 1.5) + pW; 
 
       const oTotal = opp.wins + opp.losses;
       const oW = oTotal > 0 ? opp.wins / oTotal : 0;
-      const oS = 2.0 + (opp.level * 0.5) + oW;
+      const oS = 2.0 + (opp.level * 1.5) + oW;
 
       const probPlayer = pS / (pS + oS);
       const payoutMult = 1 / probPlayer;
@@ -1577,12 +1731,15 @@ export default function RacingSetup({ onBack, onBeginRace }) {
 
       const playerRacer = {
         isPlayer: true,
+        presetId: activeProfile.id,
+        isPractice: isPractice,
         id: `player_heat_${heat.index}`,
-        name: preset.label.split(' (')[0], 
+        name: activeProfile.label.split(' (')[0], 
         imagePath: skin.imagePath,
         facing: skin.facing,
-        racingStats: { speed: preset.speed, jump: preset.jump, turning: preset.turning },
-        passive: preset.passive,
+        racingStats: { speed: activeProfile.speed, jump: activeProfile.jump, turning: activeProfile.turning },
+        passives: activeProfile.passives,
+        level: activeProfile.level,
         laps: 1,
         wagerInfo: { amount: heat.wager, potential }
       };
@@ -1594,14 +1751,14 @@ export default function RacingSetup({ onBack, onBeginRace }) {
         imagePath: opp.imagePath,
         facing: opp.facing,
         racingStats: opp.stats,
-        passive: opp.passive,
+        passives: opp.passives,
+        level: opp.level,
         laps: 1
       };
 
       return [playerRacer, oppRacer];
     });
 
-    // Array of arrays sent for Circuit to bypass external prop limits
     onBeginRace(circuitData, 'track_a');
   };
 
@@ -1706,14 +1863,26 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                       ))}
                       
                       <div className="mt-2 flex flex-col gap-1">
-                        <span className="text-[10px] font-mono font-bold uppercase text-stone-500">Passive Ability</span>
-                        <select 
-                          value={quickPassives[id] || 'none'} 
-                          onChange={(e) => setQuickPassives(prev => ({...prev, [id]: e.target.value}))}
-                          className="bg-stone-900 border border-stone-700 rounded p-2 font-mono text-[10px] uppercase text-white outline-none"
-                        >
-                          {AVAILABLE_PASSIVES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                        </select>
+                        <span className="text-[10px] font-mono font-bold uppercase text-stone-500 mb-1">Passive Abilities</span>
+                        <div className="flex flex-wrap gap-1">
+                          {AVAILABLE_PASSIVES.map(p => {
+                            const isSelected = (quickPassives[id] || []).includes(p.id);
+                            return (
+                              <button 
+                                key={p.id} 
+                                onClick={() => {
+                                  setQuickPassives(prev => {
+                                    const curr = prev[id] || [];
+                                    return { ...prev, [id]: isSelected ? curr.filter(x => x !== p.id) : [...curr, p.id] };
+                                  });
+                                }}
+                                className={`px-2 py-1 text-[9px] font-mono font-bold uppercase rounded border transition-colors ${isSelected ? 'bg-sky-500/20 text-sky-400 border-sky-500/50' : 'bg-stone-900 text-stone-500 border-stone-700 hover:border-stone-500'}`}
+                              >
+                                {p.label}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1734,19 +1903,18 @@ export default function RacingSetup({ onBack, onBeginRace }) {
 
   if (view === 'circuit' && heats.length > 0) {
     const currentHeat = heats[activeTab];
-    const activePreset = PLAYER_PRESETS.find(p => p.id === currentHeat.presetId);
-    const activeSkinData = MOUNTS[activePreset.mountId].skins.find(s => s.id === activePreset.skinId);
+    const activeProfile = playerProfiles.find(p => p.id === currentHeat.presetId);
+    const activeSkinData = MOUNTS[activeProfile.mountId].skins.find(s => s.id === activeProfile.skinId);
     const selectedOpp = circuitOpponents.find(o => o.id === currentHeat.selectedOppId);
     const allHeatsReady = heats.every(h => h.selectedOppId !== null);
 
     let oddsData = null;
     if (selectedOpp) {
-      const pW = (activePreset.wins + activePreset.losses) > 0 ? activePreset.wins / (activePreset.wins + activePreset.losses) : 0;
-      // Formula unmasked: Now uses actual activePreset.level
-      const pS = 2.0 + (activePreset.level * 0.5) + pW;
+      const pW = (activeProfile.wins + activeProfile.losses) > 0 ? activeProfile.wins / (activeProfile.wins + activeProfile.losses) : 0;
+      const pS = 2.0 + (activeProfile.level * 1.5) + pW;
       
       const oW = (selectedOpp.wins + selectedOpp.losses) > 0 ? selectedOpp.wins / (selectedOpp.wins + selectedOpp.losses) : 0;
-      const oS = 2.0 + (selectedOpp.level * 0.5) + oW;
+      const oS = 2.0 + (selectedOpp.level * 1.5) + oW;
       const probPlayer = pS / (pS + oS);
       oddsData = { prob: probPlayer, mult: 1 / probPlayer, potential: currentHeat.wager * (1 / probPlayer) };
     }
@@ -1759,13 +1927,21 @@ export default function RacingSetup({ onBack, onBeginRace }) {
             <div>
               <h1 className="font-serif text-5xl font-black text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]">WAGERING CIRCUIT</h1>
               <div className="flex items-center gap-4 mt-3">
-                <span className="font-mono text-xs uppercase text-stone-500 tracking-widest">Total Heats:</span>
-                <div className="flex gap-2">
-                  {[1, 2, 3].map(num => (
-                    <button key={num} onClick={() => handleCircuitLengthChange(num)} className={`w-8 h-8 rounded border flex items-center justify-center font-black ${circuitLength === num ? 'bg-amber-500 text-stone-950 border-amber-400' : 'bg-stone-900 border-stone-700 text-stone-400 hover:bg-stone-800'}`}>
-                      {num}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4">
+                  <span className="font-mono text-xs uppercase text-stone-500 tracking-widest">Total Heats:</span>
+                  <div className="flex gap-2">
+                    {[1, 2, 3].map(num => (
+                      <button key={num} onClick={() => handleCircuitLengthChange(num)} className={`w-8 h-8 rounded border flex items-center justify-center font-black ${circuitLength === num ? 'bg-amber-500 text-stone-950 border-amber-400' : 'bg-stone-900 border-stone-700 text-stone-400 hover:bg-stone-800'}`}>
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 ml-6 border-l border-stone-800 pl-6">
+                  <span className="font-mono text-xs uppercase text-stone-500 tracking-widest">Practice Mode:</span>
+                  <button onClick={() => setIsPractice(!isPractice)} className={`w-12 h-6 rounded-full p-1 transition-colors ${isPractice ? 'bg-amber-500' : 'bg-stone-800'}`}>
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${isPractice ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -1790,8 +1966,10 @@ export default function RacingSetup({ onBack, onBeginRace }) {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 py-4 animate-[fadeIn_0.3s_ease-out]">
             
             <section className="lg:col-span-4 flex flex-col gap-4">
-              <h2 className="font-mono text-sm font-bold uppercase tracking-widest text-sky-400">Your Mount</h2>
-              <div className="rounded-2xl border-2 border-stone-700 bg-stone-900/80 p-6 shadow-xl flex flex-col gap-6">
+              <h2 className="font-mono text-sm font-bold uppercase tracking-widest text-sky-400 flex items-center gap-2">
+                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-stone-950 text-[10px]">1</span> Your Mount
+              </h2>
+              <div className="rounded-2xl border-2 border-stone-700 bg-stone-900/80 p-6 shadow-xl flex flex-col gap-6 relative">
                 
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-mono font-bold uppercase text-stone-500">Roster Profile</label>
@@ -1800,24 +1978,43 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                     onChange={(e) => updateHeat(activeTab, 'presetId', e.target.value)}
                     className="bg-stone-950 border border-stone-700 rounded-lg p-3 font-serif text-xl text-white outline-none focus:border-amber-500"
                   >
-                    {PLAYER_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                    {playerProfiles.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
                 </div>
 
-                <div className="flex justify-center h-48 py-4">
+                <div className="flex justify-center h-32 py-2">
                   <img src={assetUrl(activeSkinData.imagePath)} alt="mount" className="h-full object-contain drop-shadow-[0_15px_15px_rgba(0,0,0,0.8)]" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-stone-950 border border-stone-800 rounded-lg p-3 text-center flex flex-col">
-                    <span className="text-[10px] font-mono text-stone-500 uppercase">Record</span>
-                    <span className="font-mono font-bold text-white mt-1">
-                      <span className="text-emerald-400">{activePreset.wins}W</span> - <span className="text-rose-400">{activePreset.losses}L</span>
-                    </span>
+                <div className="flex flex-col gap-4">
+                  <div className="bg-stone-950 border border-stone-800 rounded-lg p-3 text-center flex flex-col items-center">
+                    <span className="text-[10px] font-mono text-stone-500 uppercase mb-2">Record</span>
+                    <div className="flex items-center gap-2">
+                       <input type="number" min="0" value={activeProfile.wins} onChange={(e)=>handleProfileEdit(activeProfile.id, 'wins', parseInt(e.target.value)||0)} className="w-12 bg-transparent text-emerald-400 font-mono font-bold text-center border-b border-stone-700 focus:border-emerald-400 outline-none"/>
+                       <span className="text-stone-500">-</span>
+                       <input type="number" min="0" value={activeProfile.losses} onChange={(e)=>handleProfileEdit(activeProfile.id, 'losses', parseInt(e.target.value)||0)} className="w-12 bg-transparent text-rose-400 font-mono font-bold text-center border-b border-stone-700 focus:border-rose-400 outline-none"/>
+                    </div>
                   </div>
-                  <div className="bg-stone-950 border border-stone-800 rounded-lg p-3 text-center flex flex-col">
-                    <span className="text-[10px] font-mono text-stone-500 uppercase">Passive</span>
-                    <span className="font-mono text-[10px] font-bold text-sky-400 uppercase tracking-wider mt-2">{activePreset.passive.replace('_', ' ')}</span>
+                  
+                  <div className="bg-stone-950 border border-stone-800 rounded-lg p-3 text-center flex flex-col items-center">
+                    <span className="text-[10px] font-mono text-stone-500 uppercase mb-2">Passives</span>
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {AVAILABLE_PASSIVES.map(p => {
+                        const isSelected = activeProfile.passives.includes(p.id);
+                        return (
+                          <button 
+                            key={p.id}
+                            onClick={() => {
+                              const next = isSelected ? activeProfile.passives.filter(x => x !== p.id) : [...activeProfile.passives, p.id];
+                              handleProfileEdit(activeProfile.id, 'passives', next);
+                            }}
+                            className={`px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase rounded border transition-colors ${isSelected ? 'bg-sky-500/20 text-sky-400 border-sky-500/50' : 'bg-stone-900 text-stone-500 border-stone-700 hover:border-stone-500'}`}
+                          >
+                            {p.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -1825,7 +2022,12 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                   {['speed', 'jump', 'turning'].map(stat => (
                     <div key={stat} className="flex flex-col items-center">
                       <span className="text-[10px] font-mono text-stone-500 uppercase">{stat}</span>
-                      <span className="font-serif font-black text-2xl text-white">{activePreset[stat]}</span>
+                      <input 
+                         type="number" min="1" max="40"
+                         value={activeProfile[stat]} 
+                         onChange={(e)=>handleProfileEdit(activeProfile.id, stat, Math.max(1, parseInt(e.target.value)||1))}
+                         className="w-16 bg-transparent text-center font-serif font-black text-2xl text-white outline-none border-b-2 border-stone-800 focus:border-amber-400 mt-1" 
+                      />
                     </div>
                   ))}
                 </div>
@@ -1834,7 +2036,9 @@ export default function RacingSetup({ onBack, onBeginRace }) {
 
             <section className="lg:col-span-4 flex flex-col gap-4">
                <div className="flex justify-between items-end">
-                <h2 className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-400">Matchmaking Pool</h2>
+                <h2 className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-stone-950 text-[10px]">2</span> Select Opponent
+                </h2>
                 <button onClick={() => generateCircuitPool(circuitLength)} className="text-[10px] font-mono font-bold uppercase text-stone-500 hover:text-white transition">↻ Refresh Pool</button>
               </div>
               
@@ -1843,7 +2047,6 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                   const isSelectedForThisHeat = currentHeat.selectedOppId === opp.id;
                   const assignedHeatIndex = heats.findIndex(h => h.selectedOppId === opp.id);
                   const isAssignedElsewhere = assignedHeatIndex !== -1 && assignedHeatIndex !== activeTab;
-                  
                   const totalRaces = opp.wins + opp.losses;
                   const winPct = totalRaces > 0 ? ((opp.wins / totalRaces) * 100).toFixed(0) : 0;
 
@@ -1857,21 +2060,24 @@ export default function RacingSetup({ onBack, onBeginRace }) {
                       <div className="flex flex-col flex-1">
                         <div className="flex justify-between items-start">
                           <h3 className={`font-serif text-lg font-black ${isSelectedForThisHeat ? 'text-emerald-400' : 'text-white'}`}>{opp.name}</h3>
-                          {isAssignedElsewhere && (
-                            <span className="text-[8px] font-mono font-bold uppercase tracking-widest bg-stone-800 border border-stone-600 text-stone-400 px-2 py-0.5 rounded">Heat {assignedHeatIndex + 1}</span>
-                          )}
+                          {isAssignedElsewhere && <span className="text-[8px] font-mono font-bold uppercase tracking-widest bg-stone-800 border border-stone-600 text-stone-400 px-2 py-0.5 rounded">Heat {assignedHeatIndex + 1}</span>}
                         </div>
-                        <div className="flex gap-3 text-[10px] font-mono mt-1">
-                          <span className="text-stone-400 border border-stone-700 rounded px-1.5 bg-stone-950">Lvl {opp.level}</span>
-                          <span className="text-emerald-400">{opp.wins} W</span>
+                        <div className="flex gap-2 text-[10px] font-mono mt-1 items-center">
+                          <span className={`border border-stone-700 rounded px-1.5 bg-stone-950 font-bold ${opp.level >= 6 ? 'text-amber-400' : 'text-stone-400'}`}>Lvl {opp.level}</span>
+                          {opp.isAce && <span className="text-[8px] font-mono font-bold uppercase tracking-widest bg-amber-900/30 text-amber-400 px-1 rounded border border-amber-800">ACE</span>}
+                          <span className="text-emerald-400 ml-1">{opp.wins} W</span>
                           <span className="text-rose-400">{opp.losses} L</span>
                         </div>
                         <div className="flex justify-between mt-1.5 items-end">
                            <span className="text-[9px] font-mono text-stone-500 uppercase tracking-widest">Win Rate: <span className="text-white">{winPct}%</span></span>
-                           {opp.passive !== 'none' && (
-                             <span className="text-[9px] font-mono text-sky-400 font-bold uppercase tracking-widest">⭐ {opp.passive.replace('_', ' ')}</span>
-                           )}
                         </div>
+                        {opp.passives.length > 0 && (
+                           <div className="flex flex-wrap gap-1 mt-2 justify-end">
+                             {opp.passives.map(p => (
+                               <span key={p} className="text-[8px] font-mono text-sky-400 font-bold uppercase tracking-widest bg-sky-900/30 px-1 rounded border border-sky-800">⭐ {p.replace('_', ' ')}</span>
+                             ))}
+                           </div>
+                        )}
                       </div>
                     </button>
                   );
@@ -1880,28 +2086,25 @@ export default function RacingSetup({ onBack, onBeginRace }) {
             </section>
 
             <section className="lg:col-span-4 flex flex-col gap-4">
-               <h2 className="font-mono text-sm font-bold uppercase tracking-widest text-amber-400">The Wager</h2>
+               <h2 className="font-mono text-sm font-bold uppercase tracking-widest text-amber-400 flex items-center gap-2">
+                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-stone-950 text-[10px]">3</span> Lock Wager
+               </h2>
                {selectedOpp && oddsData ? (
                 <div className="rounded-2xl border-2 border-amber-500/50 bg-stone-900/90 p-6 shadow-[0_0_30px_rgba(251,191,36,0.1)] flex flex-col gap-6 animate-[fadeIn_0.3s_ease-out]">
-                  
                   <div className="flex justify-between items-center bg-stone-950 p-4 rounded-xl border border-stone-800">
                     <div className="flex flex-col items-center">
                       <span className="text-[10px] font-mono uppercase text-stone-500 mb-1">Win Prob</span>
-                      <span className="font-serif text-3xl font-black text-sky-400">
-                        {(oddsData.prob * 100).toFixed(1)}%
-                      </span>
+                      <span className="font-serif text-3xl font-black text-sky-400">{(oddsData.prob * 100).toFixed(1)}%</span>
                     </div>
                     <div className="h-10 w-px bg-stone-700" />
                     <div className="flex flex-col items-center">
                       <span className="text-[10px] font-mono uppercase text-stone-500 mb-1">Payout Mult</span>
-                      <span className="font-serif text-3xl font-black text-emerald-400">
-                        {oddsData.mult.toFixed(2)}x
-                      </span>
+                      <span className="font-serif text-3xl font-black text-emerald-400">{oddsData.mult.toFixed(2)}x</span>
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-mono font-bold uppercase text-stone-400">Wager Amount ($)</label>
+                    <label className="text-xs font-mono font-bold uppercase text-stone-400 text-center">Wager Amount ($)</label>
                     <input 
                       type="number" min="1" 
                       value={currentHeat.wager} 

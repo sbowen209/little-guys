@@ -12,18 +12,33 @@
  *                      other source; the NET decides how many dice are rolled, and
  *                      advantage and disadvantage cancel one another out
  *   defenseAdvantage ({ ctx, self, attacker, isSpecial }) -> number  (as above)
- *   damageBonus      ({ ctx, self, target, damage })      -> number (added to damage)
+ *   damageBonus      ({ ctx, self, target, damage, advantage }) -> number (added to damage;
+ *                      `advantage` is the net the attack rolled with)
  *   burnPotency      ({ ctx, self })                      -> number (damage of Burns THIS pet applies)
+ *   onTurnStart      ({ ctx, self })                      -- self's turn began (not while Stunned)
  *   onAttackHit      ({ ctx, self, target, isSpecial })   -- landed an attack
+ *   onAttackMiss     ({ ctx, self, target, isSpecial })   -- an attack was blocked
  *   onDealDamage     ({ ctx, self, target, amount })      -- damage actually went through
  *   onDamaged        ({ ctx, self, attacker, amount })    -- took damage from an attack
  *   onStatusApplied  ({ ctx, self, target, statusId })    -- self applied a status to target
  *   onStunned        ({ ctx, self, target })              -- self converted counters into Stunned
+ *   onShieldPopped   ({ ctx, self, attacker })            -- self's Bubble Shield popped
+ *   onEnterField     ({ ctx, self, previous })            -- self took the field. `previous` is the
+ *                      pet it replaced, or null when it is the lead at the opening bell
  *   onKO             ({ ctx, self, target })              -- self knocked target out
  *   onFaint          ({ ctx, self, killer })              -- self was knocked out
  *   onAllySpcGain    ({ ctx, self, ally, amount })        -- an ally generated Special charge
  *   benchCharge      ({ ctx, self, active })      -> number  Special charge gained while benched.
  *                                                  Nothing generates bench charge without this.
+ *
+ * Useful `ctx` members beyond the obvious ones: `activeFoeOf`, `alliesOf`,
+ * `benchedFoesOf`, `benchedAlliesOf`, `addHeartCounters`, `forceSwitch`,
+ * `clearDebuffs`, `modStat`, `rng`, and
+ * `queueSwitchInBonus(side, { heal, overheal, spc, label })` — handed to the
+ * next pet that takes the field on that side.
+ *
+ * `ctx.heal(pet, n, { label, overheal })` — `overheal: true` carries a pet past
+ * its Max HP, and the nameplate grows extra hearts to show the surplus.
  *
  * Flags (not hooks):
  *   debuffImmune  true -> the pet cannot receive statuses of kind 'debuff'
@@ -49,9 +64,9 @@ export const PASSIVES = {
   },
   scorching_flames: {
     id: 'scorching_flames',
-    name: 'Scorching Flames',
+    name: 'Hell Flames',
     level: 5,
-    desc: 'Burns inflicted by this pet deal 3 damage instead of 2.',
+    desc: 'Burns inflicted by this pet deal 1 extra damage.',
     hooks: {
       burnPotency: () => 3,
     },
@@ -62,14 +77,15 @@ export const PASSIVES = {
     id: 'intimidating',
     name: 'Intimidating',
     level: 1,
-    desc: 'Advantage on attacks against enemies at full health.',
+    desc: 'Advantage and +1 damage against enemies at full health.',
     hooks: {
       attackAdvantage: ({ target }) => (target.hp >= target.maxHp ? 1 : 0),
+      damageBonus: ({ target }) => (target.hp >= target.maxHp ? 1 : 0),
     },
   },
   smells_weakness: {
     id: 'smells_weakness',
-    name: 'Smells Weakness',
+    name: 'Relentless',
     level: 5,
     desc: 'Advantage on attacks against enemies with 2 or fewer hearts.',
     hooks: {
@@ -155,11 +171,11 @@ export const PASSIVES = {
     id: 'hex_claws',
     name: 'Hex Claws',
     level: 1,
-    desc: 'Successful standard attacks have a 1/6 chance to inflict 1 stack of Cursed.',
+    desc: 'Successful standard attacks have a 25% chance to inflict 1 stack of Cursed.',
     hooks: {
       onAttackHit: ({ ctx, self, target, isSpecial }) => {
         if (isSpecial) return;
-        if (ctx.rng.die(6) === 1) {
+        if (ctx.rng.die(4) === 1) {
           ctx.applyStatus(target, STATUS.CURSED, 1, { source: self, label: 'Hex Claws' });
         }
       },
@@ -221,58 +237,41 @@ export const PASSIVES = {
     id: 'famine_feast',
     name: 'Famine Feast',
     level: 5,
-    desc: 'After knocking out an opponent, gain +20 Max ATK permanently and recover 1 heart.',
+    desc: 'After knocking out an opponent, gain +40 Max ATK permanently.',
     hooks: {
       onKO: ({ ctx, self }) => {
-        ctx.modStat(self, 'atkFlat', 20, { source: self, label: 'Famine Feast' });
-        ctx.heal(self, 1, { source: self, label: 'Famine Feast' });
+        ctx.modStat(self, 'atkFlat', 40, { source: self, label: 'Famine Feast' });
       },
     },
   },
 
   /* ── Felightning ──────────────────────────────────────────────── */
-  backline_current: {
-    id: 'backline_current',
-    name: 'Backline Current',
+  get_away: {
+    id: 'get_away',
+    name: 'Get Away',
     level: 1,
-    desc: 'While benched, roll your SPC die each turn and bank half of it. Your active ally is fed a quarter of the same roll.',
-    hooks: {
-      /**
-       * Bench charge is no longer a property of the Support role — nothing
-       * generates it without a passive — so this carries the original design
-       * intent instead. Feeding the active ally is what makes parking a Support
-       * on the bench a real tactical choice rather than a dead slot.
-       */
-      benchCharge: ({ ctx, self, active }) => {
-        const roll = ctx.rng.die(self.stats.spc);
-        const relay = Math.floor(roll * 0.25);
-        if (relay > 0 && active && !active.fainted) {
-          ctx.gainSpc(active, relay, 'passive');
-        }
-        return Math.floor(roll * 0.5);
-      },
-    },
-  },
-  baton_pass: {
-    id: 'baton_pass',
-    name: 'Baton Pass',
-    level: 1,
-    desc: 'When this pet is knocked out, the next ally to take the field gains 1 heart.',
+    desc: 'When knocked out, inflict Paralyzed on a random benched opponent.',
     hooks: {
       onFaint: ({ ctx, self }) => {
-        ctx.queueSwitchInBonus(self.side, { heal: 1, label: 'Baton Pass' });
+        const bench = ctx.benchedFoesOf(self);
+        if (!bench.length) return;
+        ctx.applyStatus(ctx.rng.pick(bench), STATUS.PARALYZED, 1, { source: self, label: 'Get Away' });
       },
     },
   },
-  overcharge: {
-    id: 'overcharge',
-    name: 'Overcharge',
+  parting_charge: {
+    id: 'parting_charge',
+    name: 'Parting Charge',
+    provisional: true,
     level: 5,
-    desc: 'When you inflict Paralyzed, also inflict 3 Stun Counters.',
+    desc: 'When knocked out, bank 50 Special charge — which passes to whoever takes the field next.',
     hooks: {
-      onStatusApplied: ({ ctx, self, target, statusId }) => {
-        if (statusId !== STATUS.PARALYZED) return;
-        ctx.applyStatus(target, STATUS.STUN_COUNTER, 3, { source: self, label: 'Overcharge' });
+      /** A fainting pet hands its meter to its replacement, so charging up on
+       *  the way down is how this reaches the next ally. `setSpc` rather than
+       *  `gainSpc` because charge cannot be *gained* by a pet that is already
+       *  down — this is the meter it leaves behind. */
+      onFaint: ({ ctx, self }) => {
+        ctx.setSpc(self, self.spc + 50, 'Parting Charge');
       },
     },
   },
@@ -302,15 +301,258 @@ export const PASSIVES = {
       },
     },
   },
-  undertow: {
-    id: 'undertow',
-    name: 'Undertow',
-    level: 5,
-    desc: 'Damp you inflict also strips 10 Max ATK until the target\'s next attack.',
+  /* ══ SECOND WAVE ═══════════════════════════════════════════════════
+   * As with the abilities, a passive whose card carried no name is marked
+   * `provisional: true`; the behaviour is exactly what the card described.
+   */
+
+  /* ── Cerberus ─────────────────────────────────────────────────── */
+  twin_bite: {
+    id: 'twin_bite',
+    name: 'Twin Bite',
+    level: 1,
+    desc: 'After an attack is blocked, gain 1 stack of Advantage.',
     hooks: {
-      onStatusApplied: ({ ctx, self, target, statusId }) => {
-        if (statusId !== STATUS.DAMP) return;
-        ctx.modStat(target, 'atkNext', -10, { source: self, label: 'Undertow' });
+      onAttackMiss: ({ ctx, self }) => {
+        ctx.applyStatus(self, STATUS.ADVANTAGE, 1, { source: self, label: 'Twin Bite' });
+      },
+    },
+  },
+  press_the_advantage: {
+    id: 'press_the_advantage',
+    name: 'Press the Advantage',
+    provisional: true,
+    level: 5,
+    desc: 'When attacking with net Advantage, 50% chance to deal 1 extra damage.',
+    hooks: {
+      damageBonus: ({ ctx, advantage }) => (advantage > 0 && ctx.rng.coin() ? 1 : 0),
+    },
+  },
+
+  /* ── Milk Truck ───────────────────────────────────────────────── */
+  milk_shake: {
+    id: 'milk_shake',
+    name: 'Milk Shake',
+    level: 1,
+    desc: 'When damaged, gain 1 stack of Energized.',
+    hooks: {
+      onDamaged: ({ ctx, self }) => {
+        ctx.applyStatus(self, STATUS.ENERGIZED, 1, { source: self, label: 'Milk Shake' });
+      },
+    },
+  },
+  second_stomach: {
+    id: 'second_stomach',
+    name: 'Second Stomach',
+    provisional: true,
+    level: 5,
+    desc: 'At the start of your turn, a 1-in-10 chance to recover 1 heart.',
+    hooks: {
+      onTurnStart: ({ ctx, self }) => {
+        if (ctx.rng.die(10) === 1) ctx.heal(self, 1, { label: 'Second Stomach' });
+      },
+    },
+  },
+
+  /* ── Balto ────────────────────────────────────────────────────── */
+  first_light: {
+    id: 'first_light',
+    name: 'First Light',
+    provisional: true,
+    level: 1,
+    desc: 'Double Max ATK and Advantage on any roll taken during either pet\'s first turn on the field.',
+    hooks: {
+      attackScale: ({ self, target }) => (self.turnsInPlay <= 1 || target.turnsInPlay <= 1 ? 2 : 1),
+      attackAdvantage: ({ self, target }) => (self.turnsInPlay <= 1 || target.turnsInPlay <= 1 ? 1 : 0),
+      defenseAdvantage: ({ self, attacker }) => (self.turnsInPlay <= 1 || attacker.turnsInPlay <= 1 ? 1 : 0),
+    },
+  },
+  fresh_legs: {
+    id: 'fresh_legs',
+    name: 'Fresh Legs',
+    provisional: true,
+    level: 5,
+    desc: 'When you start the match or enter from the bench, gain 1 stack of Powerful.',
+    hooks: {
+      onEnterField: ({ ctx, self }) => {
+        ctx.applyStatus(self, STATUS.POWERFUL, 1, { source: self, label: 'Fresh Legs' });
+      },
+    },
+  },
+
+  /* ── Watthog ──────────────────────────────────────────────────── */
+  chain_lightning: {
+    id: 'chain_lightning',
+    name: 'Chain Lightning',
+    level: 1,
+    desc: 'When you deal damage, a 1-in-6 chance to arc 1 damage to a benched enemy as well.',
+    hooks: {
+      onDealDamage: ({ ctx, self }) => {
+        if (ctx.rng.die(6) !== 1) return;
+        const bench = ctx.benchedFoesOf(self);
+        if (!bench.length) return;
+        ctx.dealDamage(ctx.rng.pick(bench), 1, { attacker: self, cause: 'Chain Lightning' });
+      },
+    },
+  },
+  supercharge: {
+    id: 'supercharge',
+    name: 'Supercharge',
+    level: 5,
+    desc: 'Gain 15 Special charge whenever you are damaged.',
+    hooks: {
+      onDamaged: ({ ctx, self }) => {
+        ctx.gainSpc(self, 15, 'Supercharge');
+      },
+    },
+  },
+
+  /* ── Quillbacabra ─────────────────────────────────────────────── */
+  bristleback: {
+    id: 'bristleback',
+    name: 'Bristleback',
+    provisional: true,
+    level: 1,
+    desc: 'When damaged, 25% chance to deal 1 damage back to the attacker.',
+    hooks: {
+      onDamaged: ({ ctx, self, attacker }) => {
+        if (!attacker || attacker.fainted) return;
+        if (ctx.rng.die(4) === 1) {
+          ctx.dealDamage(attacker, 1, { attacker: self, cause: 'Bristleback' });
+        }
+      },
+    },
+  },
+  parting_quills: {
+    id: 'parting_quills',
+    name: 'Parting Quills',
+    provisional: true,
+    level: 5,
+    desc: 'When knocked out, the killer takes 1 damage plus 1 for every stack of Zaptap you were holding.',
+    hooks: {
+      onFaint: ({ ctx, self, killer }) => {
+        if (!killer || killer.fainted) return;
+        const zaptap = self.statuses[STATUS.ZAPTAP]?.stacks ?? 0;
+        ctx.dealDamage(killer, 1 + zaptap, { attacker: self, cause: 'Parting Quills' });
+      },
+    },
+  },
+
+  /* ── Punchadillo ──────────────────────────────────────────────── */
+  concussive_blast: {
+    id: 'concussive_blast',
+    name: 'Concussive Blast',
+    provisional: true,
+    level: 1,
+    desc: 'When you land a third Stun Counter on the enemy in front of you, every benched enemy takes 1 Stun Counter.',
+    hooks: {
+      /** Only the pet on the field can set this off. Letting a benched Stun
+       *  feed the bench again would chain forever. */
+      onStunned: ({ ctx, self, target }) => {
+        if (target !== ctx.activeFoeOf(self)) return;
+        for (const benched of ctx.benchedFoesOf(self)) {
+          ctx.applyStatus(benched, STATUS.STUN_COUNTER, 1, { source: self, label: 'Concussive Blast' });
+        }
+      },
+    },
+  },
+  rolling_guard: {
+    id: 'rolling_guard',
+    name: 'Rolling Guard',
+    provisional: true,
+    level: 5,
+    desc: 'When you land a third Stun Counter on an enemy, gain 2 stacks of Fade.',
+    hooks: {
+      onStunned: ({ ctx, self }) => {
+        ctx.applyStatus(self, STATUS.FADE, 2, { source: self, label: 'Rolling Guard' });
+      },
+    },
+  },
+
+  /* ── Mosstiff ─────────────────────────────────────────────────── */
+  photosynthesis: {
+    id: 'photosynthesis',
+    name: 'Photosynthesis',
+    provisional: true,
+    level: 1,
+    desc: 'At the start of your turn, 25% chance to gain a Heart Counter without attacking.',
+    hooks: {
+      onTurnStart: ({ ctx, self }) => {
+        if (ctx.rng.die(4) === 1) ctx.addHeartCounters(self, 1, 'Photosynthesis');
+      },
+    },
+  },
+  last_bloom: {
+    id: 'last_bloom',
+    name: 'Last Bloom',
+    provisional: true,
+    level: 5,
+    desc: 'When knocked out, the next ally to take the field gains 1 heart — which can carry them above their Max HP.',
+    hooks: {
+      onFaint: ({ ctx, self }) => {
+        ctx.queueSwitchInBonus(self.side, { heal: 1, overheal: true, label: 'Last Bloom' });
+      },
+    },
+  },
+
+  /* ── Bellybummer ──────────────────────────────────────────────── */
+  spooked: {
+    id: 'spooked',
+    name: 'Spooked',
+    level: 1,
+    desc: 'When you take the field, the opposing pet gains 5 stacks of Disadvantage.',
+    hooks: {
+      onEnterField: ({ ctx, self }) => {
+        const foe = ctx.activeFoeOf(self);
+        if (foe && !foe.fainted) {
+          ctx.applyStatus(foe, STATUS.DISADVANTAGE, 5, { source: self, label: 'Spooked' });
+        }
+      },
+    },
+  },
+  stage_fright: {
+    id: 'stage_fright',
+    name: 'Stage Fright',
+    provisional: true,
+    level: 5,
+    desc: 'When you take the field, the opposing pet gains 5 stacks of Stunt.',
+    hooks: {
+      onEnterField: ({ ctx, self }) => {
+        const foe = ctx.activeFoeOf(self);
+        if (foe && !foe.fainted) {
+          ctx.applyStatus(foe, STATUS.STUNT, 5, { source: self, label: 'Stage Fright' });
+        }
+      },
+    },
+  },
+
+  /* ── Mega Chicken ─────────────────────────────────────────────── */
+  raking_spurs: {
+    id: 'raking_spurs',
+    name: 'Raking Spurs',
+    provisional: true,
+    level: 1,
+    desc: 'Successful attacks have a 50% chance to inflict 1 stack of Bleed.',
+    hooks: {
+      onAttackHit: ({ ctx, self, target }) => {
+        if (ctx.rng.coin()) {
+          ctx.applyStatus(target, STATUS.BLEED, 1, { source: self, label: 'Raking Spurs' });
+        }
+      },
+    },
+  },
+  death_throes: {
+    id: 'death_throes',
+    name: 'Death Throes',
+    provisional: true,
+    level: 5,
+    desc: 'When knocked out, the opposing pet gains 1 stack of Rend.',
+    hooks: {
+      onFaint: ({ ctx, self }) => {
+        const foe = ctx.activeFoeOf(self);
+        if (foe && !foe.fainted) {
+          ctx.applyStatus(foe, STATUS.REND, 1, { source: self, label: 'Death Throes' });
+        }
       },
     },
   },

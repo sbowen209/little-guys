@@ -97,6 +97,45 @@ function RacerHUD({ racer, racerIndex, isActive, laps, maxPos }) {
 }
 
 // -----------------------------------------------------------------------------
+// HEAT LEDGER ROW COMPONENT
+// -----------------------------------------------------------------------------
+function HeatLedgerRow({ heat }) {
+  const pWon = heat.winner.id === heat.player.id;
+  const oWon = heat.winner.id === heat.opp.id;
+  const maxP = heat.maxPos || 150;
+
+  const renderRacerInfo = (racer, isWinner) => (
+    <div className="flex flex-col items-center gap-1 w-24">
+       <div className={`relative flex items-end justify-center w-12 h-12 rounded-full border-b-4 ${isWinner ? (racer.isPlayer ? 'border-emerald-500 bg-emerald-950/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'border-rose-500 bg-rose-950/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]') : 'border-stone-700 bg-stone-900 opacity-40 grayscale'} overflow-visible transition-all`}>
+         {isWinner && <span className="absolute -top-3 -right-2 text-xl drop-shadow-md z-10">👑</span>}
+         <img src={assetUrl(racer.imagePath)} className="w-10 h-10 object-contain origin-bottom" style={{transform: racer.isPlayer ? 'none' : 'scaleX(-1)'}} draggable={false} />
+       </div>
+       <div className="flex flex-col items-center w-full mt-0.5">
+         <span className="font-mono text-[10px] font-bold text-stone-200 truncate w-full text-center leading-none mb-1.5">{racer.name}</span>
+         <div className="flex items-center gap-1">
+           <span className="text-[8px] font-mono font-bold text-sky-400 bg-sky-950/40 px-1 py-0.5 rounded border border-sky-900/50 uppercase tracking-widest leading-none">Lv.{racer.level || 1}</span>
+           <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded border uppercase tracking-widest leading-none ${isWinner ? 'text-amber-400 bg-amber-950/40 border-amber-900/50' : 'text-stone-500 bg-stone-900/80 border-stone-700'}`}>Pos:{Math.min(racer.position || 0, maxP)}</span>
+         </div>
+       </div>
+    </div>
+  );
+
+  return (
+    <div className="flex items-center justify-between bg-stone-900/80 border border-stone-700 p-3 sm:px-5 rounded-2xl shadow-inner w-full">
+      <div className="font-mono text-[10px] text-stone-400 font-bold w-12 sm:w-16 text-left tracking-widest uppercase">Heat {heat.heatIndex}</div>
+      <div className="flex items-center gap-2 sm:gap-6">
+        {renderRacerInfo(heat.player, pWon)}
+        <span className="font-mono text-[9px] text-stone-600 font-black italic mb-6">VS</span>
+        {renderRacerInfo(heat.opp, oWon)}
+      </div>
+      <div className={`font-mono text-lg sm:text-xl font-black w-20 sm:w-24 text-right ${heat.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+        {heat.profit >= 0 ? '+' : ''}{formatMoney(heat.profit)}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // CORE RACE VIEW (Single Heat)
 // -----------------------------------------------------------------------------
 function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitState, onNextHeat }) {
@@ -140,16 +179,25 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
   ) : 0;
   
   const newTotal = isCircuit ? (circuitState.winnings + profitThisHeat) : 0;
-
   const heatWinner = racer1.position >= maxPos ? racer1 : racer2;
-  const heatLoser = racer1.position >= maxPos ? racer2 : racer1;
+
+  const allHeats = isCircuit ? [
+    ...(circuitState.history || []),
+    { heatIndex: circuitState.current, player: racer1, opp: racer2, winner: heatWinner, profit: profitThisHeat, maxPos }
+  ] : [];
 
   const handleFinishAction = () => {
     if (!isCircuit) {
       onAbandon();
       return;
     }
-    onNextHeat(profitThisHeat);
+    onNextHeat({
+      profit: profitThisHeat,
+      player: racer1,
+      opp: racer2,
+      winner: heatWinner,
+      maxPos
+    });
   };
   
   return (
@@ -193,64 +241,33 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
                {winner.name} takes the crown!
              </h2>
              
-             <div className="flex flex-col w-full max-w-md gap-4 mb-8 animate-[fadeIn_1s_ease-out_0.8s_both]">
+             <div className="flex flex-col w-full max-w-md mb-6 animate-[fadeIn_1s_ease-out_0.8s_both]">
                
-               {/* Leaderboard Post-Race Positions out of 150 */}
-               <div className="flex flex-col rounded-xl border border-stone-700 bg-stone-900/80 shadow-inner w-full mb-4 overflow-hidden">
-                  <div className="bg-stone-950 py-2 border-b border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-widest">Heat Placements</div>
-                  
-                  {/* Heat Winner Row */}
-                  <div className="flex items-center justify-between px-6 py-4 bg-amber-900/20">
-                     <span className="font-serif text-xl font-black text-amber-400 flex items-center gap-2">🥇 {heatWinner.name}</span>
-                     <span className="font-mono text-sm text-stone-300 font-bold bg-stone-950 px-2 py-1 rounded border border-stone-700">150 / 150</span>
-                  </div>
-                  
-                  {/* Heat Loser Row */}
-                  <div className="flex items-center justify-between px-6 py-4 opacity-70 border-t border-stone-800">
-                     <span className="font-serif text-lg font-black text-stone-400 ml-1">💀 {heatLoser.name}</span>
-                     <span className="font-mono text-sm text-stone-500 font-bold bg-stone-950 px-2 py-1 rounded border border-stone-800">{Math.min(heatLoser.position, 150)} / 150</span>
-                  </div>
-               </div>
-
-               {isCircuit && (
-                 <>
-                   {/* Current Heat Wager Result */}
-                   {winner.isPlayer ? (
-                     <div className="rounded-xl bg-emerald-950/80 border border-emerald-500/50 px-6 py-4 font-mono text-center shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                       <div className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-1">Heat {circuitState.current} Wager Won!</div>
-                       <div className="text-3xl font-black text-emerald-400">+{formatMoney(profitThisHeat)}</div>
-                     </div>
-                   ) : (
-                     <div className="rounded-xl bg-rose-950/80 border border-rose-500/50 px-6 py-4 font-mono text-center shadow-[0_0_30px_rgba(244,63,94,0.3)]">
-                       <div className="text-xs font-bold uppercase tracking-widest text-rose-500 mb-1">Heat {circuitState.current} Wager Lost</div>
-                       <div className="text-3xl font-black text-rose-400">{formatMoney(profitThisHeat)}</div>
-                     </div>
-                   )}
-
-                   {/* Detailed Ledger Receipt */}
-                   <div className="bg-stone-900/90 border border-stone-700 rounded-xl p-5 flex flex-col gap-3 shadow-inner text-left mt-2">
-                      <div className="flex justify-between items-center text-xs font-mono uppercase text-stone-400">
-                          <span>Previous Balance:</span>
-                          <span>{formatMoney(circuitState.winnings)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs font-mono uppercase text-stone-400 border-b border-stone-700 pb-3">
-                          <span>Heat {circuitState.current} Result:</span>
-                          <span className={profitThisHeat >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                              {profitThisHeat >= 0 ? '+' : ''}{formatMoney(profitThisHeat)}
-                          </span>
-                      </div>
-                      <div className="flex justify-between items-center pt-2 bg-stone-950 -mx-5 -mb-5 px-5 py-4 rounded-b-xl border-t border-stone-800">
-                          <span className="text-sm font-bold font-mono uppercase text-stone-300">New Circuit Total:</span>
-                          <span className={`font-serif text-3xl font-black ${newTotal >= 0 ? 'text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]' : 'text-rose-500'}`}>
-                              {formatMoney(newTotal)}
-                          </span>
-                      </div>
-                   </div>
-                 </>
+               {isCircuit ? (
+                 <div className="w-full">
+                    <h3 className="text-left font-mono text-xs uppercase tracking-widest text-stone-500 border-b border-stone-800 pb-2 mb-3">Circuit Ledger</h3>
+                    <div className="flex flex-col gap-2 w-full max-h-[30vh] overflow-y-auto custom-scrollbar pr-2">
+                       {allHeats.map(heat => <HeatLedgerRow key={heat.heatIndex} heat={heat} />)}
+                    </div>
+                    <div className="flex justify-between items-center pt-4 mt-3 border-t border-stone-800 px-4 bg-stone-950/50 rounded-b-xl">
+                       <span className="text-sm font-bold font-mono uppercase text-stone-400">Total Net Profit:</span>
+                       <span className={`font-serif text-3xl font-black ${newTotal >= 0 ? 'text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]' : 'text-rose-500'}`}>
+                          {formatMoney(newTotal)}
+                       </span>
+                    </div>
+                 </div>
+               ) : (
+                 <div className="flex flex-col rounded-xl border border-stone-700 bg-stone-900/80 shadow-inner w-full overflow-hidden">
+                    <div className="bg-stone-950 py-2 border-b border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-widest">Exhibition Complete</div>
+                    <div className="flex items-center justify-center px-6 py-8">
+                       <span className="font-serif text-3xl font-black text-amber-400">{heatWinner.name} Wins!</span>
+                    </div>
+                 </div>
                )}
+
              </div>
 
-             <button onClick={handleFinishAction} className="mt-4 w-full max-w-md rounded-xl border-2 border-amber-500 bg-amber-500/20 px-8 py-5 font-mono text-lg font-black uppercase tracking-widest text-amber-400 hover:bg-amber-400 hover:text-stone-950 transition-all hover:scale-105 shadow-[0_0_20px_rgba(251,191,36,0.3)] animate-[fadeIn_1s_ease-out_1s_both]">
+             <button onClick={handleFinishAction} className="w-full max-w-md rounded-xl border-2 border-amber-500 bg-amber-500/20 px-8 py-5 font-mono text-lg font-black uppercase tracking-widest text-amber-400 hover:bg-amber-400 hover:text-stone-950 transition-all hover:scale-105 shadow-[0_0_20px_rgba(251,191,36,0.3)] animate-[fadeIn_1s_ease-out_1s_both]">
                {isCircuit ? (circuitState.current === circuitState.total ? "Complete Circuit" : "Proceed to Next Heat ➔") : "Return to Gateway"}
              </button>
            </div>
@@ -342,6 +359,11 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
         @keyframes fadeIn { 0%{opacity:0} 100%{opacity:1} }
         @keyframes battleShake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-10px,5px)} 40%{transform:translate(10px,-5px)} 60%{transform:translate(-6px,4px)} 80%{transform:translate(6px,-3px)} }
         @keyframes jumpBounce { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-40px) scale(1.05)} }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #44403c; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #57534e; }
       `}} />
     </div>
   );
@@ -353,6 +375,7 @@ function ActiveRaceView({ racers: initialRacers, onAbandon, isCircuit, circuitSt
 export default function RaceManager({ racers, track, onAbandon }) {
   const [heatIndex, setHeatIndex] = useState(0);
   const [winnings, setWinnings] = useState(0);
+  const [heatResults, setHeatResults] = useState([]);
   const [showSummary, setShowSummary] = useState(false);
 
   // The critical fix: Detect multi-heat array structure directly
@@ -364,13 +387,73 @@ export default function RaceManager({ racers, track, onAbandon }) {
     return <ActiveRaceView key="quick-race" racers={currentRacers} track={track} onAbandon={onAbandon} isCircuit={false} />;
   }
 
-  const handleNextHeat = (profit) => {
-    const newTotal = winnings + profit;
+  const handleNextHeat = (heatData) => {
+    const newTotal = winnings + heatData.profit;
     setWinnings(newTotal);
+    
+    const nextHeatResult = { ...heatData, heatIndex: heatIndex + 1 };
+    const updatedHeats = [...heatResults, nextHeatResult];
+    setHeatResults(updatedHeats);
+
+    if (!heatData.player.isPractice) {
+       const saved = localStorage.getItem('playerProfiles');
+       if (saved) {
+         const profiles = JSON.parse(saved);
+         const profileIndex = profiles.findIndex(p => p.id === heatData.player.presetId);
+         if (profileIndex > -1) {
+           if (heatData.winner.id === heatData.player.id) profiles[profileIndex].wins += 1;
+           else profiles[profileIndex].losses += 1;
+           localStorage.setItem('playerProfiles', JSON.stringify(profiles));
+         }
+       }
+    }
     
     if (heatIndex + 1 < circuitData.length) {
       setHeatIndex(prev => prev + 1);
     } else {
+      // --- RACE HISTORY CACHE (Circuit Save) ---
+      if (!heatData.player.isPractice) {
+        const savedHistory = localStorage.getItem('raceHistory');
+        let history = [];
+        
+        if (savedHistory) {
+           const parsed = JSON.parse(savedHistory);
+           // Handle smooth cache reset if data is from the old single-heat iteration
+           if (parsed.length > 0 && !parsed[0].heats) history = []; 
+           else history = parsed;
+        }
+
+        history.unshift({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+          date: new Date().toLocaleString(),
+          totalProfit: newTotal,
+          heats: updatedHeats.map(h => ({
+            heatIndex: h.heatIndex,
+            profit: h.profit,
+            maxPos: h.maxPos,
+            winnerId: h.winner.id,
+            player: {
+              id: h.player.id,
+              name: h.player.name,
+              imagePath: h.player.imagePath,
+              level: h.player.level,
+              position: h.player.position,
+              isPlayer: true
+            },
+            opp: {
+              id: h.opp.id,
+              name: h.opp.name,
+              imagePath: h.opp.imagePath,
+              level: h.opp.level,
+              position: h.opp.position,
+              isPlayer: false
+            }
+          }))
+        });
+        localStorage.setItem('raceHistory', JSON.stringify(history));
+      }
+      // ------------------------------------------
+
       setShowSummary(true);
     }
   };
@@ -378,12 +461,16 @@ export default function RaceManager({ racers, track, onAbandon }) {
   if (showSummary) {
     const isProfit = winnings >= 0;
     return (
-      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-stone-950 text-white p-6 animate-[fadeIn_0.5s_ease-out]">
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-stone-950 text-white p-6 animate-[fadeIn_0.5s_ease-out] overflow-y-auto custom-scrollbar">
          <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(5,5,5,0.9)_0%,rgba(10,10,10,1)_100%)]" />
-         <div className="relative z-10 flex flex-col items-center bg-stone-900 border border-stone-800 p-12 rounded-3xl shadow-2xl w-full max-w-2xl text-center">
+         <div className="relative z-10 flex flex-col items-center bg-stone-900 border border-stone-800 p-8 sm:p-12 rounded-3xl shadow-2xl w-full max-w-2xl text-center my-auto">
            <h1 className="font-serif text-5xl sm:text-6xl font-black text-amber-400 tracking-tighter mb-2">CIRCUIT COMPLETE</h1>
-           <span className="font-mono text-sm text-stone-400 uppercase tracking-widest mb-10">Total Wager Resolution</span>
+           <span className="font-mono text-sm text-stone-400 uppercase tracking-widest mb-8">Total Wager Resolution</span>
            
+           <div className="flex flex-col gap-3 w-full mb-8">
+              {heatResults.map(heat => <HeatLedgerRow key={heat.heatIndex} heat={heat} />)}
+           </div>
+
            <div className={`p-8 rounded-2xl border-4 flex flex-col items-center w-full mb-10 shadow-2xl ${isProfit ? 'bg-emerald-950/30 border-emerald-500/50 shadow-emerald-500/20' : 'bg-rose-950/30 border-rose-500/50 shadow-rose-500/20'}`}>
               <span className={`font-mono text-sm font-bold uppercase tracking-widest mb-2 ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {isProfit ? 'Total Net Profit' : 'Total Net Loss'}
@@ -393,7 +480,7 @@ export default function RaceManager({ racers, track, onAbandon }) {
               </span>
            </div>
 
-           <button onClick={onAbandon} className="px-12 py-5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-mono text-lg font-black uppercase tracking-widest rounded-xl transition-all hover:scale-105 border border-stone-600 shadow-xl">
+           <button onClick={onAbandon} className="px-12 py-5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-mono text-lg font-black uppercase tracking-widest rounded-xl transition-all hover:scale-105 border border-stone-600 shadow-xl w-full sm:w-auto">
              Return to Gateway
            </button>
          </div>
@@ -408,7 +495,7 @@ export default function RaceManager({ racers, track, onAbandon }) {
       track={track} 
       onAbandon={onAbandon} 
       isCircuit={true}
-      circuitState={{ current: heatIndex + 1, total: circuitData.length, winnings }}
+      circuitState={{ current: heatIndex + 1, total: circuitData.length, winnings, history: heatResults }}
       onNextHeat={handleNextHeat}
     />
   );

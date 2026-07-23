@@ -26,7 +26,7 @@ import { assetUrl } from '../../utils/assets.js';
  * Shiva is flipped to face in toward the arena. */
 const CROWD_CAST = [
   { id: 'gil', src: '/images/characters/Gil.webp', x: 264, y: 154, w: 172, h: 186 },
-  { id: 'castellan', src: '/images/characters/Castellan.png', x: 366, y: 146, w: 148, h: 197 },
+  { id: 'castellan', src: '/images/characters/Castellan.webp', x: 366, y: 146, w: 148, h: 197 },
   { id: 'shiva', src: '/images/characters/shiva.webp', x: 1188, y: 156, w: 165, h: 192, flip: true },
 ];
 

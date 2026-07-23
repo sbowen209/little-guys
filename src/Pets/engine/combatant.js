@@ -38,6 +38,8 @@ export const createCombatant = (entry, side, slot) => {
     heartCounters: 0,
     fainted: false,
     hasEntered: false,
+    /** Turns this pet has begun while on the field — 1 during its very first one. */
+    turnsInPlay: 0,
     passives,
     ability: abilityDef(species.special),
     debuffImmune: passives.some((p) => p.debuffImmune),
@@ -72,6 +74,40 @@ export const clearStatus = (pet, id) => { delete pet.statuses[id]; };
 
 export const blocksStatus = (pet, id) => pet.debuffImmune && isDebuff(id);
 
+/* ── DECLARATIVE STATUS BEHAVIOUR ────────────────────────────────── */
+
+/**
+ * Every status on this pet whose definition carries `field`, as
+ * [{ id, def, stacks }]. This is the one place the generic status behaviour
+ * described in data/statuses.js is looked up, so the engine never has to name
+ * a status to honour it.
+ */
+export const statusesWith = (pet, field) => {
+  const found = [];
+  for (const id of Object.keys(pet.statuses)) {
+    const def = statusDef(id);
+    if (def[field] !== undefined) found.push({ id, def, stacks: stacksOf(pet, id) });
+  }
+  return found;
+};
+
+/** The highest damage floor any status imposes on this pet's attacks. */
+export const statusDamageFloor = (pet) =>
+  statusesWith(pet, 'damageFloor').reduce((n, { def }) => Math.max(n, def.damageFloor), 0);
+
+export const specialBlocked = (pet) => statusesWith(pet, 'blocksSpecial').some(({ def }) => def.blocksSpecial);
+
+/** Total damage reflected at an attacker, summed over every thorns status. */
+export const statusThorns = (pet) =>
+  statusesWith(pet, 'thorns').reduce((n, { def }) => n + def.thorns, 0);
+
+/** How many dice to roll for Special charge, and how big, after statuses. */
+export const spcRollPlan = (pet) => {
+  const dice = statusesWith(pet, 'spcDice').reduce((n, { def }) => Math.max(n, def.spcDice), 1);
+  const mult = statusesWith(pet, 'spcMult').reduce((n, { def }) => n * def.spcMult, 1);
+  return { dice, size: Math.max(1, Math.floor(pet.stats.spc * mult)) };
+};
+
 /* ── DERIVED STATS ───────────────────────────────────────────────── */
 
 /** Max ATK with only permanent modifiers applied — what Sunder checks against. */
@@ -86,7 +122,7 @@ export const baseDefenseDie = (pet) =>
  * Order: flat modifiers -> Damp -> Bubble Shield -> Rend -> Stagnation.
  */
 export const defenseDie = (pet) => {
-  let d = Math.max(1, pet.stats.def + pet.mods.defFlat + pet.mods.defNext - 10 * stacksOf(pet, STATUS.DAMP));
+  let d = Math.max(1, pet.stats.def + pet.mods.defFlat + pet.mods.defNext - RULES.DAMP_DEF_PENALTY * stacksOf(pet, STATUS.DAMP));
   if (hasStatus(pet, STATUS.BUBBLE_SHIELD)) d *= 2;
   if (hasStatus(pet, STATUS.REND)) d = Math.floor(d / 2);
 
