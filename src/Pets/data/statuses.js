@@ -13,6 +13,7 @@
  * these is pure data — no engine file has to change to add it.
  *
  *   attackAdvantage   number folded into the owner's net advantage when it attacks
+ *   defBonus          flat Max DEF added per stack
  *   damageFloor       the owner's attacks deal at least this much damage
  *   blocksSpecial     the owner cannot spend its Special meter
  *   thorns            damage reflected at whoever damages the owner with an attack
@@ -53,6 +54,7 @@ export const STATUS = {
   STUNT: 'stunt',
   POWERFUL: 'powerful',
   BLEED: 'bleed',
+  BONE_SHIELD: 'bone_shield',
 };
 
 export const STATUS_DEFS = {
@@ -235,6 +237,17 @@ export const STATUS_DEFS = {
     tone: '#dc2626',
     desc: 'At the start of your turn, roll 1d4 per stack. Each 1 deals 1 damage and clears that stack.',
     tickOnTurn: { dieSize: 4, procValues: [1], damage: 1, clearOnProc: true },
+  },
+  [STATUS.BONE_SHIELD]: {
+    id: STATUS.BONE_SHIELD,
+    name: 'Bone Shield',
+    icon: '🦴',
+    kind: 'buff',
+    stackable: true,
+    tone: '#e7e5e4',
+    desc: 'Grants +5 Max DEF per stack. One stack is stripped whenever an attack damages you.',
+    defBonus: 5,
+    consumeOnDamaged: 1,
   },
 };
 

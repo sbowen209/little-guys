@@ -11,6 +11,8 @@
  *   trueStrike    skips the opposed roll entirely and always connects.
  *   damage        hearts removed on a hit.
  *   lifesteal     true -> damage dealt is healed back to the attacker, capped at its Max HP.
+ *   atkFromDef    true -> the attack die is derived from Max DEF instead of Max ATK.
+ *   bonusVsRoles  { roles: [...], damage: n } extra damage against those defending roles.
  *   applyToTarget / applyToSelf  [{ status, stacks }] applied on a hit (or immediately for 'effect').
  *   vfx           key the view uses to pick a projectile / cast animation.
  *   onResolve     ({ ctx, self, target, hit }) for anything the fields can't express.
@@ -19,7 +21,7 @@
  */
 
 import { STATUS } from './statuses.js';
-import { ELEMENT } from './constants.js';
+import { ELEMENT, ROLE } from './constants.js';
 
 export const ABILITIES = {
   hellfire_bolt: {
@@ -295,6 +297,68 @@ export const ABILITIES = {
       ctx.setSpc(target, target.spc - stolen, 'Lifesteal');
       ctx.gainSpc(self, stolen, 'Lifesteal');
     },
+  },
+
+  /* ══ THIRD WAVE ════════════════════════════════════════════════════ */
+
+  thunderstorm: {
+    id: 'thunderstorm',
+    name: 'Thunderstorm',
+    kind: 'attack',
+    cost: 100,
+    atkScale: 2,
+    damage: 1,
+    element: ELEMENT.AIR,
+    vfx: 'bolt',
+    desc: 'Rolls at 200% Max ATK. On a hit: 1 damage. Gains 1 stack of Zaptap whether or not the strike lands.',
+    applyToSelf: [{ status: STATUS.ZAPTAP, stacks: 1 }],
+    /** The charge builds either way — the storm goes up regardless. */
+    selfEffectsOnMiss: true,
+  },
+
+  bone_gore: {
+    id: 'bone_gore',
+    name: 'Bone Gore',
+    kind: 'attack',
+    cost: 100,
+    atkScale: 2,
+    damage: 2,
+    element: ELEMENT.SHADOW,
+    vfx: 'rend_slash',
+    desc: 'Rolls at 200% Max ATK. On a hit: 2 damage, or 3 against a Tank or an Affinity Tank.',
+    bonusVsRoles: { roles: [ROLE.TANK, ROLE.AFF_TANK], damage: 1 },
+  },
+
+  rip_and_tear: {
+    id: 'rip_and_tear',
+    name: 'Rip and Tear',
+    provisional: true,
+    kind: 'attack',
+    cost: 100,
+    atkScale: 2,
+    damage: 1,
+    element: ELEMENT.FIRE,
+    vfx: 'maul',
+    desc: 'Rolls at 200% Max ATK. On a hit: 1 damage, Rend, and 1 stack of Bleed.',
+    applyToTarget: [
+      { status: STATUS.REND, stacks: 1 },
+      { status: STATUS.BLEED, stacks: 1 },
+    ],
+  },
+
+  shell_slam: {
+    id: 'shell_slam',
+    name: 'Shell Slam',
+    provisional: true,
+    kind: 'attack',
+    cost: 100,
+    atkScale: 2,
+    atkFromDef: true,
+    damage: 1,
+    element: ELEMENT.WATER,
+    vfx: 'bulwark',
+    desc: 'Attacks with 200% of your Max DEF in place of Max ATK. On a hit: 1 damage and inflicts Burn.',
+    applyToTarget: [{ status: STATUS.BURN, stacks: 1 }],
   },
 
   talon_flurry: {

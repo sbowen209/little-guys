@@ -12,7 +12,10 @@
  * out of line before any of it reaches the arena.
  */
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { simulateBattle } from './simulate.js';
+import { createCombatant, defenseDie, attackDie, addStacks } from './combatant.js';
 import { PET_DB, SPECIES, RULES, ROLE, ABILITIES, PASSIVES, STATUS, STATUS_DEFS } from '../data/index.js';
 
 const SAMPLES = Number(process.argv[2]) || 2000;
@@ -166,10 +169,17 @@ check('Bubble Shield does not heal', !JSON.stringify(ABILITIES.bubble_shield).in
     units.every((u) => (u.passives ?? []).every((p) => PASSIVES[p])),
   );
 }
-check(
-  'Every unit points at artwork',
-  Object.values(PET_DB).every((u) => typeof u.art === 'string' && u.art.endsWith('.webp')),
-);
+// Not just "looks like a path" — the file has to be on disk. Renaming artwork
+// is otherwise silent until someone opens the builder and sees a broken image.
+{
+  const units = Object.values(PET_DB);
+  const missing = units.filter((u) => !existsSync(join('public', u.art ?? '')));
+  check(
+    `Every unit's artwork exists on disk (${units.length} files)`,
+    units.every((u) => typeof u.art === 'string' && u.art.endsWith('.webp')) && missing.length === 0,
+  );
+  if (missing.length) for (const u of missing) console.log(`        missing: ${u.id} -> ${u.art}`);
+}
 // Statuses are read peripherally off each pet's flank, so two of them sharing
 // an icon makes the HUD ambiguous at a glance.
 {
@@ -299,6 +309,9 @@ check('No match ended by running out of turns', capped === 0);
   let sawHeartHeal = 0;   // the Healer role cashing counters in
   let sawForced = 0;      // a switch that was not caused by a knockout
   let sawOverheal = 0;    // a pet carrying hearts above its Max HP
+  let boneShieldDef = 0;  // Bone Shield actually raising the DEF die
+  let sawBoneShield = 0;
+  let defBasedRolls = 0;  // a Special that swings with Max DEF instead of Max ATK
 
   // Advantage and Disadvantage are spent one stack per attack, so every roll
   // that names one must be matched by exactly one expiry.
@@ -360,6 +373,15 @@ check('No match ended by running out of turns', capped === 0);
 
       if (e.type === 'heal' && e.label === 'Heart Counters') sawHeartHeal += 1;
 
+      if (e.type === 'status_apply' && e.status === STATUS.BONE_SHIELD) sawBoneShield += 1;
+
+      // Shell Slam rolls off Max DEF, so a d20-ATK turtle must out-roll its own
+      // attack die by a wide margin when it casts.
+      if (e.type === 'action' && e.ability === 'shell_slam') {
+        const pet = e.state.teams[e.side][e.slot];
+        if (pet.baseDefDie > pet.baseAtkDie) defBasedRolls += 1;
+      }
+
       // Bench support can carry an ally past its Max HP; those extra hearts
       // have to survive the trip onto the field.
       for (const team of e.state.teams) {
@@ -392,6 +414,44 @@ check('No match ended by running out of turns', capped === 0);
     advRolls[STATUS.DISADVANTAGE] > 0 && advExpiries[STATUS.DISADVANTAGE] === advRolls[STATUS.DISADVANTAGE]);
   check(`The Healer role converts counters into hearts (${sawHeartHeal} heals)`, sawHeartHeal > 0);
   check('Bench support can push an ally above its Max HP', sawOverheal > 0);
+  check(`Bone Shield reaches the field (${sawBoneShield} applications)`, sawBoneShield > 0);
+  check(`A Special can roll off Max DEF instead of Max ATK (${defBasedRolls} casts)`,
+    defBasedRolls > 0);
+}
+
+// Derived-stat maths, checked directly rather than inferred from a fuzz run,
+// where Rend or Damp landing on the same pet would muddy the comparison.
+{
+  const turtle = createCombatant(entryFor('dragon_turtle', 'unit', 1), 0, 0);
+  const plainDef = defenseDie(turtle);
+  addStacks(turtle, STATUS.BONE_SHIELD, 2);
+  const shieldedDef = defenseDie(turtle);
+  check(
+    `Bone Shield adds 5 Max DEF per stack (d${plainDef} -> d${shieldedDef})`,
+    shieldedDef === plainDef + 10,
+  );
+
+  const boar = createCombatant(entryFor('bone_boar', 'unit', 1), 0, 0);
+  check(
+    'Bone Shield is a buff, so Thick Fur would not refuse it',
+    STATUS_DEFS[STATUS.BONE_SHIELD].kind === 'buff' && boar.debuffImmune === false,
+  );
+
+  // Shell Slam swings with the shell: 2x Max DEF, not 2x Max ATK. Rolled on a
+  // clean pet, because the shielded one above is deliberately inflated.
+  const slam = ABILITIES.shell_slam;
+  const fresh = createCombatant(entryFor('dragon_turtle', 'slam', 1), 0, 0);
+  const slamDie = attackDie(fresh, { scale: slam.atkScale, fromDef: true });
+  check(
+    `Shell Slam rolls 2x Max DEF (d${slamDie}, against a d${fresh.stats.atk} attack die)`,
+    slam.atkFromDef === true && slamDie === fresh.stats.def * 2,
+  );
+
+  // ...and Bone Shield feeds that too, since it raises Max DEF.
+  check(
+    `Bone Shield carries into a DEF-based Special (d${attackDie(turtle, { scale: slam.atkScale, fromDef: true })})`,
+    attackDie(turtle, { scale: slam.atkScale, fromDef: true }) === (turtle.stats.def + 10) * 2,
+  );
 }
 
 // A seed must reproduce a match exactly.

@@ -91,6 +91,10 @@ export const statusesWith = (pet, field) => {
   return found;
 };
 
+/** Flat Max DEF granted by statuses, counted per stack. */
+export const statusDefBonus = (pet) =>
+  statusesWith(pet, 'defBonus').reduce((n, { def, stacks }) => n + def.defBonus * stacks, 0);
+
 /** The highest damage floor any status imposes on this pet's attacks. */
 export const statusDamageFloor = (pet) =>
   statusesWith(pet, 'damageFloor').reduce((n, { def }) => Math.max(n, def.damageFloor), 0);
@@ -115,14 +119,15 @@ export const rawAttackDie = (pet) => pet.stats.atk + pet.mods.atkFlat;
 
 /** Max DEF before any status maths — the value Shed adds to Max ATK. */
 export const baseDefenseDie = (pet) =>
-  Math.max(1, pet.stats.def + pet.mods.defFlat + pet.mods.defNext);
+  Math.max(1, pet.stats.def + pet.mods.defFlat + pet.mods.defNext + statusDefBonus(pet));
 
 /**
  * The die the defender actually rolls.
  * Order: flat modifiers -> Damp -> Bubble Shield -> Rend -> Stagnation.
  */
 export const defenseDie = (pet) => {
-  let d = Math.max(1, pet.stats.def + pet.mods.defFlat + pet.mods.defNext - RULES.DAMP_DEF_PENALTY * stacksOf(pet, STATUS.DAMP));
+  let d = Math.max(1, pet.stats.def + pet.mods.defFlat + pet.mods.defNext + statusDefBonus(pet)
+    - RULES.DAMP_DEF_PENALTY * stacksOf(pet, STATUS.DAMP));
   if (hasStatus(pet, STATUS.BUBBLE_SHIELD)) d *= 2;
   if (hasStatus(pet, STATUS.REND)) d = Math.floor(d / 2);
 
@@ -136,11 +141,16 @@ export const defenseDie = (pet) => {
 
 /**
  * The die the attacker actually rolls.
- * Order: flat modifiers -> Shed -> Special scaling -> target's Fade.
+ * Order: flat modifiers -> Shed -> passive flat mods -> Special scaling -> target's Fade.
+ *
+ * `fromDef` swaps the whole basis to Max DEF, for a Special that swings with the
+ * shell rather than the claws. Shed is skipped in that case — adding DEF to a
+ * die that already *is* DEF would double-count it.
  */
-export const attackDie = (pet, { scale = 1, targetFade = false } = {}) => {
-  let a = Math.max(1, rawAttackDie(pet) + pet.mods.atkNext);
-  if (hasStatus(pet, STATUS.SHED)) a += baseDefenseDie(pet);
+export const attackDie = (pet, { scale = 1, targetFade = false, fromDef = false, flat = 0 } = {}) => {
+  let a = fromDef ? baseDefenseDie(pet) : Math.max(1, rawAttackDie(pet) + pet.mods.atkNext);
+  if (!fromDef && hasStatus(pet, STATUS.SHED)) a += baseDefenseDie(pet);
+  a = Math.max(1, a + flat);
   a = Math.floor(a * scale);
   if (targetFade) a = Math.floor(a / 2);
   return Math.max(1, a);

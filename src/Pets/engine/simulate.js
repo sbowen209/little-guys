@@ -297,6 +297,8 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     /** The opposing team's bench — anything that reaches past the active pet. */
     benchedFoesOf: (pet) => benchOf(otherSide(pet.side)),
     benchedAlliesOf: (pet) => benchOf(pet.side),
+    /** The whole opposing roster, fainted included — for counting losses. */
+    foesOf: (pet) => sides[otherSide(pet.side)],
     queueSwitchInBonus: (side, bonus) => { switchInBonus[side] = bonus; },
     /** Awards Healer charge from outside a successful attack. */
     addHeartCounters: (pet, count, label) => awardHeartCounters(pet, count, label),
@@ -453,7 +455,14 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     const targetFade = hasStatus(defender, STATUS.FADE);
     const trueStrike = Boolean(isSpecial && ability.trueStrike);
 
-    const atkMax = attackDie(attacker, { scale, targetFade });
+    // Flat swings on the attack die come from both sides: the attacker's own
+    // passives, and anything the defender does to blunt incoming attacks.
+    const flat = sum(attacker, 'attackFlatMod', { target: defender, isSpecial })
+      + sum(defender, 'foeAttackMod', { attacker, isSpecial });
+
+    const atkMax = attackDie(attacker, {
+      scale, targetFade, flat, fromDef: Boolean(ability?.atkFromDef),
+    });
     const defMax = defenseDie(defender);
 
     const atkAdv = attackAdvantage(attacker, defender, isSpecial);
@@ -501,6 +510,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
         applyPackets(attacker, attacker, ability.applyToSelf, ability.name);
       }
       fire(attacker, 'onAttackMiss', { target: defender, isSpecial });
+      fire(defender, 'onBlocked', { attacker, isSpecial });
       ability?.onResolve?.({ ctx, self: attacker, target: defender, hit: false });
       flushSpc();
       return;
@@ -518,6 +528,10 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     fire(attacker, 'onAttackHit', { target: defender, isSpecial });
 
     let damage = Math.max(ability?.damage ?? 1, damageFloor);
+    // A Special can be written to bite harder into particular defending roles.
+    if (ability?.bonusVsRoles?.roles?.includes(defender.species.role)) {
+      damage += ability.bonusVsRoles.damage;
+    }
     damage += sum(attacker, 'damageBonus', { target: defender, damage, advantage: atkAdv.adv });
     damage = curseCheck(attacker, damage);
 

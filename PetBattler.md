@@ -1,6 +1,6 @@
 # PET BATTLER
 
-**Game Design Document v3.1 — Deterministic Autobattler**
+**Game Design Document v3.2 — Deterministic Autobattler**
 
 This document describes the game *as implemented* in `src/Pets/`. Where v2.0 of
 the design differed from what shipped, this version follows the code and calls
@@ -17,7 +17,7 @@ out the difference. Section 14 is the contract for adding pets in later versions
 | **Combat** | Fully automated. No buttons during a match — only playback controls |
 | **Team size** | Up to 5 pets, deployed in a locked order |
 | **Health** | A small flat pool shown as hearts (base 3–8 depending on species) |
-| **Match length** | ~95 turns for a full 5v5; roughly 45 seconds at 8x speed |
+| **Match length** | ~92 turns for a full 5v5; roughly 45 seconds at 8x speed |
 
 Pet Battles are a preparation game. Every decision is made before the bell; the
 match itself is a spectacle you watch resolve. That framing drives the whole
@@ -167,6 +167,7 @@ fails loudly if the behaviour disappears again. **Do not remove that assertion.*
 | **Stunt** | Debuff | You cannot cast your Special, even at a full meter. One stack falls off at the end of your turn |
 | **Powerful** | Buff | Your attacks deal at least 2 damage. One stack consumed per attack that **lands** |
 | **Bleed** | Debuff | At the start of your turn, roll `1d4` per stack. Each `1` deals 1 damage and clears that stack |
+| **Bone Shield** | Buff | +5 Max DEF per stack. One stack is stripped whenever an attack damages you |
 | **Stagnation** | System | See §8 |
 
 A stack of **Advantage** is one attack's worth, not one step of magnitude:
@@ -175,8 +176,8 @@ holding three means three advantaged attacks, never a single roll of four dice.
 ### Declarative statuses
 
 Everything from Zaptap down is **pure data**. `data/statuses.js` documents a set
-of behaviour fields (`attackAdvantage`, `damageFloor`, `blocksSpecial`, `thorns`,
-`spcDice`, `spcMult`, `tickOnTurn`) and expiry fields (`consumeOnAttack`,
+of behaviour fields (`attackAdvantage`, `defBonus`, `damageFloor`,
+`blocksSpecial`, `thorns`, `spcDice`, `spcMult`, `tickOnTurn`) and expiry fields (`consumeOnAttack`,
 `consumeOnHit`, `consumeOnDamaged`, `consumeOnSpcRoll`, `expireAtTurnEnd`,
 `clearOnExit`) which the engine honours generically. A new status that fits them
 needs no engine change at all. The statuses above Zaptap predate this and are
@@ -255,6 +256,15 @@ Names marked *(provisional)* are placeholders awaiting a real one; they carry
 | Mosstiff | **Verdant Bloom** *(provisional)* | Effect | A random benched ally gains 1 heart, which **can exceed its Max HP** |
 | Bellybummer | **Lifesteal** | Attack, 200% ATK | 1 damage healed back to you, then roll SPC and siphon that much charge off the target |
 | Mega Chicken | **Talon Flurry** *(provisional)* | Attack, 200% ATK | 2 damage and 2 stacks of Bleed |
+| Thunder Lion | **Thunderstorm** | Attack, 200% ATK | 1 damage. Gains 1 Zaptap **whether or not the strike lands** |
+| Bone Boar | **Bone Gore** | Attack, 200% ATK | 2 damage, or 3 against a Tank or Affinity Tank |
+| Wild Cat | **Rip and Tear** *(provisional)* | Attack, 200% ATK | 1 damage, Rend, and 1 stack of Bleed |
+| Dragon Turtle | **Shell Slam** *(provisional)* | Attack, **200% of Max DEF** | 1 damage and inflicts Burn |
+
+**Shell Slam is the only Special that rolls off a stat other than ATK.** The
+`atkFromDef` field swaps the basis to Max DEF, which is what lets a `d20`
+attacker throw a `d100` swing. Shed is skipped for such an attack, since adding
+Max DEF to a die that already *is* Max DEF would count it twice.
 
 **Overhealing.** A few effects carry a pet above its Max HP. Those hearts are
 real, survive on the bench, and come onto the field with the pet; the nameplate
@@ -310,6 +320,10 @@ Every pet has a passive at Level 1 and a second at Level 5.
 | Mosstiff | **Photosynthesis** *(prov.)* — 25% chance to gain a Heart Counter at the start of your turn, without attacking | **Last Bloom** *(prov.)* — when knocked out, the next ally to enter gains 1 heart, which can exceed its Max HP |
 | Bellybummer | **Spooked** — when you take the field, the opposing pet gains 5 Disadvantage | **Stage Fright** *(prov.)* — when you take the field, the opposing pet gains 5 Stunt |
 | Mega Chicken | **Raking Spurs** *(prov.)* — successful attacks have a 50% chance to inflict Bleed | **Death Throes** *(prov.)* — when knocked out, the opposing pet gains 1 Rend |
+| Thunder Lion | **Electrofang** — successful attacks have a 1/6 chance to Paralyze | **Electrocyclone** — 25% chance to gain 1 Zaptap when damaged |
+| Bone Boar | **Bone Harvest** *(prov.)* — gain 1 Bone Shield when you deal damage | **Ossuary Guard** *(prov.)* — take the field with 2 Bone Shield already up |
+| Wild Cat | **Ambush Instinct** *(prov.)* — advantage against enemies whose Special meter is at least half full | **Scent of Blood** *(prov.)* — +5 Max ATK per pet already defeated on the enemy team |
+| Dragon Turtle | **Wear Down** — an attack that fails against you leaves the attacker Damp | **Impenetrable** — Attacker-role units roll at 15 less Max ATK against you |
 
 **Bonding** is a species tag rather than a hard-coded pairing: both Bubble
 Troubles carry `bond: 'bubble'`, and *Lovey Dovey* fires for any ally sharing
@@ -528,13 +542,14 @@ a retired passive that only a preset still referenced cannot slip through.
 
 ### Hooks a passive can use
 
-`attackAdvantage`, `defenseAdvantage`, `attackScale`, `damageBonus`,
-`burnPotency`, `onTurnStart`, `onAttackHit`, `onAttackMiss`, `onDealDamage`,
-`onDamaged`, `onStatusApplied`, `onStunned`, `onShieldPopped`, `onEnterField`,
-`onKO`, `onFaint`, `onAllySpcGain`, `benchCharge`. The authoritative list, with
-signatures, is the comment block at the top of `data/passives.js`.
+`attackAdvantage`, `defenseAdvantage`, `attackScale`, `attackFlatMod`,
+`foeAttackMod`, `damageBonus`, `burnPotency`, `onTurnStart`, `onAttackHit`,
+`onAttackMiss`, `onBlocked`, `onDealDamage`, `onDamaged`, `onStatusApplied`,
+`onStunned`, `onShieldPopped`, `onEnterField`, `onKO`, `onFaint`,
+`onAllySpcGain`, `benchCharge`. The authoritative list, with signatures, is the
+comment block at the top of `data/passives.js`.
 
-`ctx` additionally offers `activeFoeOf`, `alliesOf`, `benchedFoesOf`,
+`ctx` additionally offers `activeFoeOf`, `alliesOf`, `foesOf`, `benchedFoesOf`,
 `benchedAlliesOf`, `addHeartCounters`, `clearDebuffs`, `forceSwitch`,
 `queueSwitchInBonus`, and `heal(pet, n, { overheal })`.
 
@@ -553,7 +568,8 @@ node src/Pets/engine/balance.mjs 2000 5      # level 5 — every second passive 
 ```
 
 Reports average and longest match length, draw rate, a solo win-rate table for
-every species, and **29 rule assertions**. Run it at both levels: several rules
+every species, a **5v5 roster contribution table**, and **35 rule assertions**.
+Run it at both levels: several rules
 only exist once the Lv.5 passives are live, and a pet can be fine at one level
 and broken at the other.
 
@@ -570,7 +586,24 @@ run go green.**
 
 ---
 
-## 15. CHANGES IN v3.1
+## 15. CHANGES IN v3.2
+
+### Third wave
+
+Four more pets: **Thunder Lion** *(provisional name)*, **Bone Boar**,
+**Wild Cat** and **Dragon Turtle** — **24 species**. They brought one new
+status (Bone Shield), a Special that rolls off Max DEF, and the hooks
+`attackFlatMod`, `foeAttackMod` and `onBlocked`.
+
+> **Naming conflict, unresolved.** Thunder Lion's card was headed "Balto", but
+> that name already belongs to the Earth Attacker added in v3.1 and that card
+> was unchanged in the same spreadsheet. Two pets cannot share a name, so the
+> lion ships as `thunder_lion` under a provisional name. Ids are permanent, so
+> renaming the display name later is free; the id is not.
+
+---
+
+## 15b. CHANGES IN v3.1
 
 ### The roster doubled
 

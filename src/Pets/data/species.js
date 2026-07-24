@@ -303,4 +303,67 @@ export const SPECIES = {
     art: '/images/pets/MegaChicken.webp',
     facing: 'Left',
   },
+
+  /* ══ THIRD WAVE ════════════════════════════════════════════════════ */
+
+  /**
+   * The card for this one was headed "Balto", but that name already belongs to
+   * the Earth Attacker above and its card is unchanged — two different pets
+   * cannot share it. The artwork is a lightning lion and the whole kit is
+   * electric, so it ships under a provisional name with its own permanent id.
+   */
+  thunder_lion: {
+    id: 'thunder_lion',
+    name: 'Thunder Lion',
+    provisional: true,
+    family: 'thunderlion',
+    role: ROLE.STUNNER,
+    // Stunners ignore the affinity chart, so the offensive typing is inert and
+    // set to AIR purely so the kit reads as electric in the UI.
+    typing: { offensive: ELEMENT.AIR, defensive: ELEMENT.AIR },
+    base: { hp: 6, atk: 35, def: 35, spc: 35 },
+    special: 'thunderstorm',
+    passives: ['electrofang', 'electrocyclone'],
+    art: '/images/pets/ThunderLion.webp',
+    facing: 'Left',
+  },
+
+  bone_boar: {
+    id: 'bone_boar',
+    name: 'Bone Boar',
+    family: 'boneboar',
+    role: ROLE.ATTACKER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.SHADOW },
+    base: { hp: 5, atk: 35, def: 40, spc: 30 },
+    special: 'bone_gore',
+    passives: ['bone_harvest', 'ossuary_guard'],
+    art: '/images/pets/BoneBoar.webp',
+    facing: 'Right',
+  },
+
+  wild_cat: {
+    id: 'wild_cat',
+    name: 'Wild Cat',
+    family: 'wildcat',
+    role: ROLE.ATTACKER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.FIRE },
+    base: { hp: 5, atk: 55, def: 30, spc: 25 },
+    special: 'rip_and_tear',
+    passives: ['ambush_instinct', 'scent_of_blood'],
+    art: '/images/pets/WildCat.webp',
+    facing: 'Left',
+  },
+
+  dragon_turtle: {
+    id: 'dragon_turtle',
+    name: 'Dragon Turtle',
+    family: 'dragonturtle',
+    role: ROLE.TANK,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.WATER },
+    base: { hp: 8, atk: 20, def: 50, spc: 20 },
+    special: 'shell_slam',
+    passives: ['wear_down', 'impenetrable'],
+    art: '/images/pets/DragonTurtle.webp',
+    facing: 'Left',
+  },
 };

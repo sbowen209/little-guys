@@ -12,6 +12,12 @@
  *                      other source; the NET decides how many dice are rolled, and
  *                      advantage and disadvantage cancel one another out
  *   defenseAdvantage ({ ctx, self, attacker, isSpecial }) -> number  (as above)
+ *   attackScale      ({ ctx, self, target, isSpecial })  -> number  multiplier on your own
+ *                      attack die; the largest one wins rather than stacking
+ *   attackFlatMod    ({ ctx, self, target, isSpecial })  -> number  added to your attack die
+ *   foeAttackMod     ({ ctx, self, attacker, isSpecial }) -> number added to the die of
+ *                      whoever is attacking YOU — negative to blunt it
+ *   onBlocked        ({ ctx, self, attacker, isSpecial }) -- you turned an attack away
  *   damageBonus      ({ ctx, self, target, damage, advantage }) -> number (added to damage;
  *                      `advantage` is the net the attack rolled with)
  *   burnPotency      ({ ctx, self })                      -> number (damage of Burns THIS pet applies)
@@ -45,6 +51,7 @@
  */
 
 import { STATUS } from './statuses.js';
+import { ROLE, RULES } from './constants.js';
 
 export const PASSIVES = {
   /* ── Hellhound (Affinity) ─────────────────────────────────────── */
@@ -523,6 +530,112 @@ export const PASSIVES = {
           ctx.applyStatus(foe, STATUS.STUNT, 5, { source: self, label: 'Stage Fright' });
         }
       },
+    },
+  },
+
+  /* ══ THIRD WAVE ════════════════════════════════════════════════════ */
+
+  /* ── Thunder Lion ─────────────────────────────────────────────── */
+  electrofang: {
+    id: 'electrofang',
+    name: 'Electrofang',
+    level: 1,
+    desc: 'Successful attacks have a 1/6 chance to inflict Paralyzed.',
+    hooks: {
+      onAttackHit: ({ ctx, self, target }) => {
+        if (ctx.rng.die(6) === 1) {
+          ctx.applyStatus(target, STATUS.PARALYZED, 1, { source: self, label: 'Electrofang' });
+        }
+      },
+    },
+  },
+  electrocyclone: {
+    id: 'electrocyclone',
+    name: 'Electrocyclone',
+    level: 5,
+    desc: 'When damaged, 25% chance to gain 1 stack of Zaptap.',
+    hooks: {
+      onDamaged: ({ ctx, self }) => {
+        if (ctx.rng.die(4) === 1) {
+          ctx.applyStatus(self, STATUS.ZAPTAP, 1, { source: self, label: 'Electrocyclone' });
+        }
+      },
+    },
+  },
+
+  /* ── Bone Boar ────────────────────────────────────────────────── */
+  bone_harvest: {
+    id: 'bone_harvest',
+    name: 'Bone Harvest',
+    provisional: true,
+    level: 1,
+    desc: 'When you deal damage, gain 1 stack of Bone Shield.',
+    hooks: {
+      onDealDamage: ({ ctx, self }) => {
+        ctx.applyStatus(self, STATUS.BONE_SHIELD, 1, { source: self, label: 'Bone Harvest' });
+      },
+    },
+  },
+  ossuary_guard: {
+    id: 'ossuary_guard',
+    name: 'Ossuary Guard',
+    provisional: true,
+    level: 5,
+    desc: 'Take the field with 2 stacks of Bone Shield already up.',
+    hooks: {
+      onEnterField: ({ ctx, self }) => {
+        ctx.applyStatus(self, STATUS.BONE_SHIELD, 2, { source: self, label: 'Ossuary Guard' });
+      },
+    },
+  },
+
+  /* ── Wild Cat ─────────────────────────────────────────────────── */
+  ambush_instinct: {
+    id: 'ambush_instinct',
+    name: 'Ambush Instinct',
+    provisional: true,
+    level: 1,
+    desc: 'Advantage against enemies whose Special meter is at least half full.',
+    hooks: {
+      attackAdvantage: ({ target }) => (target.spc >= RULES.SPC_CAP / 2 ? 1 : 0),
+    },
+  },
+  scent_of_blood: {
+    id: 'scent_of_blood',
+    name: 'Scent of Blood',
+    provisional: true,
+    level: 5,
+    desc: 'Gain +5 Max ATK for every pet already defeated on the enemy team.',
+    hooks: {
+      /** Counted live rather than banked on a knockout, so it credits every
+       *  loss on that side and not only the ones this pet caused. */
+      attackFlatMod: ({ ctx, self }) => {
+        const foes = ctx.foesOf(self);
+        return foes.filter((p) => p.fainted).length * 5;
+      },
+    },
+  },
+
+  /* ── Dragon Turtle ────────────────────────────────────────────── */
+  wear_down: {
+    id: 'wear_down',
+    name: 'Wear Down',
+    level: 1,
+    desc: 'When an attack against you fails, the attacker is left Damp — 5 Max DEF per stack, washed off when they take damage.',
+    hooks: {
+      onBlocked: ({ ctx, self, attacker }) => {
+        if (!attacker || attacker.fainted) return;
+        ctx.applyStatus(attacker, STATUS.DAMP, 1, { source: self, label: 'Wear Down' });
+      },
+    },
+  },
+  impenetrable: {
+    id: 'impenetrable',
+    name: 'Impenetrable',
+    level: 5,
+    desc: 'Attacker-role units roll at 15 less Max ATK against you.',
+    hooks: {
+      foeAttackMod: ({ attacker }) => (attacker.species.role === ROLE.ATTACKER ? -15 : 0),
     },
   },
 
