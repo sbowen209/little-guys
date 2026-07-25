@@ -6,7 +6,8 @@
  */
 
 import { EV } from '../engine/events.js';
-import { statusDef } from '../data/index.js';
+import { statusDef, getSpecies } from '../data/index.js';
+import { isRanged } from './projectiles.js';
 
 export const TONE = {
   charge: '#7dd3fc',
@@ -196,16 +197,11 @@ export function floatsFor(event) {
 
 /* ── SPRITE ANIMATION SELECTION ──────────────────────────────────── */
 
-const RANGED_VFX = new Set(['firebolt', 'bolt', 'hex', 'shriek', 'flare', 'shatter']);
-const PROJECTILE_COLOR = {
-  firebolt: 'radial-gradient(circle, #fff 0%, #fde047 25%, #f97316 55%, rgba(239,68,68,0) 78%)',
-  bolt: 'radial-gradient(circle, #fff 0%, #fef08a 28%, #38bdf8 58%, rgba(56,189,248,0) 80%)',
-  hex: 'radial-gradient(circle, #fff 0%, #e9d5ff 24%, #a855f7 56%, rgba(168,85,247,0) 80%)',
-  shriek: 'radial-gradient(circle, #fff 0%, #ddd6fe 26%, #7c3aed 58%, rgba(124,58,237,0) 80%)',
+/** The species snapshotted on an event at (side, slot), or null. */
+const speciesAt = (event, side, slot) => {
+  const pet = petAt(event, side, slot);
+  return pet ? getSpecies(pet.speciesId) : null;
 };
-
-export const isRanged = (vfx) => RANGED_VFX.has(vfx);
-export const projectileStyle = (vfx) => PROJECTILE_COLOR[vfx] ?? PROJECTILE_COLOR.firebolt;
 
 /**
  * The most recent ACTION at or before the cursor — the view needs it during the
@@ -249,13 +245,17 @@ export function animationsFor(event, action) {
   if (!event) return {};
 
   switch (event.type) {
-    case EV.ACTION:
+    case EV.ACTION: {
       if (event.effect) return { [event.side]: 'channel' };
-      return { [event.side]: isRanged(event.vfx) ? 'cast' : 'windup' };
+      const species = speciesAt(event, event.side, event.slot);
+      return { [event.side]: isRanged(species, event) ? 'cast' : 'windup' };
+    }
 
-    case EV.ROLL:
+    case EV.ROLL: {
       if (!action) return {};
-      return { [action.side]: isRanged(action.vfx) ? 'cast' : 'lunge' };
+      const species = speciesAt(action, action.side, action.slot);
+      return { [action.side]: isRanged(species, action) ? 'cast' : 'lunge' };
+    }
 
     case EV.IMPACT:
       return { [event.side]: 'hit' };

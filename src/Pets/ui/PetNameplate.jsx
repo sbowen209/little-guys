@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { RULES } from '../data/index.js';
+import { RULES, ROLE, getSpecies } from '../data/index.js';
 
 const HEART_PATH =
   'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
@@ -17,6 +17,13 @@ function PetNameplate({ pet, side, isActive, damageFlash }) {
   const ready = pet.spc >= RULES.SPC_CAP;
   // A few effects heal past Max HP, so the row grows rather than hiding the surplus.
   const slots = Math.max(pet.maxHp, pet.hp);
+
+  // Healers bank Heart Counters toward topping up their most wounded ally. These
+  // are not HP (those are the red hearts above) — they are the healer's charge,
+  // so they get their own small pip meter that fills to the heal threshold.
+  const isHealer = getSpecies(pet.speciesId)?.role === ROLE.HEALER;
+  const heartCap = RULES.HEART_COUNTERS_TO_HEAL;
+  const heartCounters = Math.min(pet.heartCounters ?? 0, heartCap);
 
   return (
     <div className={`pb-plate pb-plate--${side === 0 ? 'p1' : 'p2'} ${isActive ? 'is-active' : ''}`}>
@@ -43,6 +50,20 @@ function PetNameplate({ pet, side, isActive, damageFlash }) {
         </div>
         {ready && <span className="pb-plate__ready">SPECIAL READY</span>}
       </div>
+
+      {isHealer && (
+        <div
+          className="pb-plate__counters"
+          title={`Heart Counters ${heartCounters}/${heartCap}`}
+          aria-label={`Heart Counters ${heartCounters} of ${heartCap}`}
+        >
+          {Array.from({ length: heartCap }).map((_, i) => (
+            <svg key={i} viewBox="0 0 24 24" className={`pb-counter ${i < heartCounters ? 'is-lit' : ''}`}>
+              <path d={HEART_PATH} />
+            </svg>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

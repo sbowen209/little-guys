@@ -4,9 +4,10 @@ import { randomSeed } from '../engine/rng.js';
 import { EV } from '../engine/events.js';
 import { useBattlePlayback } from '../hooks/useBattlePlayback.js';
 import {
-  animationsFor, currentAction, currentTurnSide,
-  floatsFor, isRanged, projectileStyle,
+  animationsFor, currentAction, currentTurnSide, floatsFor,
 } from './describe.js';
+import { projectileFor } from './projectiles.js';
+import { getSpecies } from '../data/index.js';
 import ArenaBackdrop from './ArenaBackdrop.jsx';
 import PetSprite from './PetSprite.jsx';
 import PetNameplate from './PetNameplate.jsx';
@@ -74,6 +75,47 @@ function useFloatingFx(event) {
 
 const isShakeEvent = (event) => event?.type === EV.IMPACT && (event.lethal || event.amount >= 2);
 
+/** Origin x of each lead in the authored 1600x900 space; leads sit at y 540. */
+const LEAD_X = [480, 1120];
+
+const isBubbleSpec = (spec) => spec.id === 'bubble_blue' || spec.id === 'bubble_pink';
+
+/**
+ * A flying attack, painted entirely from a presentation spec (see projectiles.js
+ * — nothing here knows the rules). A muzzle flash burns at the shooter, then
+ * `count` bodies fly across, staggered vertically by `spread`. Each body rides
+ * the flight keyframe named by `motion` (mirrored when P2 shoots leftward), fills
+ * with the spec `core`, and drags a `trail` streak when one is set.
+ */
+function Projectile({ spec, side }) {
+  const dir = side === 1 ? ' pb-proj--l' : '';
+  const [w, h] = spec.size;
+  const bubble = isBubbleSpec(spec) ? ' pb-bubble' : '';
+
+  return (
+    <>
+      <div className="pb-muzzle" style={{ left: LEAD_X[side], '--glow': spec.glow }} />
+      {Array.from({ length: spec.count }).map((_, i) => {
+        const dy = (i - (spec.count - 1) / 2) * spec.spread;
+        return (
+          <div
+            key={i}
+            className={`pb-proj pb-proj--${spec.motion}${dir}${bubble}`}
+            style={{
+              width: w, height: h,
+              marginLeft: -w / 2, marginTop: -h / 2,
+              top: 540 + dy,
+              background: spec.core,
+              '--glow': spec.glow,
+              '--trail': spec.trail ?? 'transparent',
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 /**
  * Owns the seed and nothing else. Each rematch produces a new `result`, and
  * keying the stage on it remounts the playback state instead of unwinding it.
@@ -133,10 +175,18 @@ function BattleStage({ result, onRematch, onExit }) {
   const anims = useMemo(() => animationsFor(event, action), [event, action]);
   const turnSide = useMemo(() => (timeline ? currentTurnSide(timeline, index) : null), [timeline, index]);
 
+  // The projectile the current attack flies, or null for a melee blow. Resolved
+  // once here so the flight (ROLL) and the recoloured impact (IMPACT) agree.
+  const projectile = useMemo(() => {
+    if (!action || action.effect) return null;
+    const pet = action.state?.teams?.[action.side]?.[action.slot];
+    return projectileFor(pet ? getSpecies(pet.speciesId) : null, action);
+  }, [action]);
+
   if (!state) return null;
 
   const leads = [state.teams[0][state.lead[0]], state.teams[1][state.lead[1]]];
-  const showProjectile = event.type === EV.ROLL && action && isRanged(action.vfx) && !action.effect;
+  const showProjectile = event.type === EV.ROLL && projectile;
   const showSpark = event.type === EV.IMPACT && event.fromAttack;
   const showFlash = event.type === EV.IMPACT && event.lethal;
 
@@ -180,15 +230,17 @@ function BattleStage({ result, onRematch, onExit }) {
               ))}
 
               {showProjectile && (
-                <div
-                  key={`bolt-${event.id}`}
-                  className={`pb-bolt ${action.side === 1 ? 'pb-bolt--l' : ''}`}
-                  style={{ background: projectileStyle(action.vfx) }}
-                />
+                <Projectile key={`proj-${event.id}`} spec={projectile} side={action.side} />
               )}
 
               {showSpark && (
-                <div key={`spark-${event.id}`} className={`pb-spark pb-spark--${event.side === 0 ? 'p1' : 'p2'}`} />
+                <div
+                  key={`spark-${event.id}`}
+                  className={`pb-spark pb-spark--${event.side === 0 ? 'p1' : 'p2'}`}
+                  style={projectile ? {
+                    background: `radial-gradient(circle, rgba(255,255,255,0.92) 0%, ${projectile.glow} 32%, transparent 66%)`,
+                  } : undefined}
+                />
               )}
 
               {showFlash && <div key={`flash-${event.id}`} className="pb-flash" />}

@@ -357,6 +357,22 @@
   text-shadow: 0 1px 4px rgba(50, 35, 15, 0.95);
 }
 
+/* Healer Heart Counters — the healer's charge toward a heal, shown as small
+   green pips that light up as they bank. Distinct from the red HP hearts above:
+   smaller, outlined, and tinted the Healer role green. */
+.pb-plate__counters { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.pb-counter {
+  width: 16px; height: 16px; flex: none;
+  fill: rgba(74, 222, 128, 0.16);
+  stroke: rgba(74, 222, 128, 0.7); stroke-width: 1.5px;
+  transition: fill 200ms ease, transform 220ms cubic-bezier(0.25, 1.4, 0.4, 1);
+}
+.pb-counter.is-lit {
+  fill: #4ade80; stroke: none;
+  filter: drop-shadow(0 0 4px rgba(74, 222, 128, 0.7));
+  transform: scale(1.08);
+}
+
 /* ── ROLL CARDS ──────────────────────────────────────────────────── */
 
 /* No panel behind these. A white card under the bars put a hard rectangle over
@@ -459,27 +475,138 @@
 
 /* ── VFX ─────────────────────────────────────────────────────────── */
 
-.pb-bolt {
-  position: absolute; top: 540px; left: 0;
-  width: 118px; height: 56px; margin: -28px 0 0 -59px;
+/* ── PROJECTILES ──────────────────────────────────────────────────────
+   A body is positioned at left:0/top:540 and flown across by a transform
+   keyframe; its width/height/background/top come inline from the spec. Every
+   flight duration is divided by var(--sp) so the speed controls stay in sync,
+   and each motion is mirrored L (P2 shooting left) / R (P1 shooting right). */
+
+.pb-proj {
+  position: absolute; left: 0;
   border-radius: 999px;
-  animation: pbBoltFlyR calc(0.52s / var(--sp)) cubic-bezier(0.42, 0, 0.9, 0.55) both;
+  pointer-events: none;
+  /* Above the duellists (z 20/30) so an attack sweeps in front of the sprites
+     rather than flying behind them; still below the UI layer (z 40+). */
+  z-index: 35;
+  will-change: transform, opacity;
 }
-.pb-bolt--l { animation-name: pbBoltFlyL; }
-@keyframes pbBoltFlyR {
+/* Trailing streak. Invisible when --trail resolves to transparent. */
+.pb-proj::after {
+  content: ''; position: absolute; top: 50%; right: 52%;
+  width: 155%; height: 34%; transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(to left, var(--trail, transparent), transparent 82%);
+}
+.pb-proj--l::after {
+  right: auto; left: 52%;
+  background: linear-gradient(to right, var(--trail, transparent), transparent 82%);
+}
+
+.pb-proj--straight { animation: pbFlyR calc(0.52s / var(--sp)) cubic-bezier(0.42, 0, 0.9, 0.55) both; }
+.pb-proj--straight.pb-proj--l { animation-name: pbFlyL; }
+.pb-proj--arc { animation: pbArcR calc(0.64s / var(--sp)) cubic-bezier(0.34, 0, 0.5, 1) both; }
+.pb-proj--arc.pb-proj--l { animation-name: pbArcL; }
+.pb-proj--float { animation: pbFloatFlyR calc(0.92s / var(--sp)) cubic-bezier(0.4, 0, 0.6, 1) both; }
+.pb-proj--float.pb-proj--l { animation-name: pbFloatFlyL; }
+.pb-proj--spin { animation: pbSpinR calc(0.58s / var(--sp)) cubic-bezier(0.4, 0, 0.7, 0.7) both; }
+.pb-proj--spin.pb-proj--l { animation-name: pbSpinL; }
+
+@keyframes pbFlyR {
   0%   { transform: translate(480px, 0) scale(0.4); opacity: 0; }
   18%  { opacity: 1; }
-  100% { transform: translate(1120px, 0) scale(1.3); opacity: 0.1; }
+  100% { transform: translate(1120px, 0) scale(1.25); opacity: 0.12; }
 }
-@keyframes pbBoltFlyL {
+@keyframes pbFlyL {
   0%   { transform: translate(1120px, 0) scale(0.4); opacity: 0; }
   18%  { opacity: 1; }
-  100% { transform: translate(480px, 0) scale(1.3); opacity: 0.1; }
+  100% { transform: translate(480px, 0) scale(1.25); opacity: 0.12; }
+}
+/* arc: rises to an apex around mid-flight, then drops onto the target. */
+@keyframes pbArcR {
+  0%   { transform: translate(480px, 0) scale(0.5); opacity: 0; }
+  18%  { opacity: 1; }
+  50%  { transform: translate(800px, -170px) scale(1.05); }
+  100% { transform: translate(1120px, 24px) scale(1.15); opacity: 0.12; }
+}
+@keyframes pbArcL {
+  0%   { transform: translate(1120px, 0) scale(0.5); opacity: 0; }
+  18%  { opacity: 1; }
+  50%  { transform: translate(800px, -170px) scale(1.05); }
+  100% { transform: translate(480px, 24px) scale(1.15); opacity: 0.12; }
+}
+/* float: slower, bobbing up and down as it drifts across. */
+@keyframes pbFloatFlyR {
+  0%   { transform: translate(480px, 0) scale(0.6); opacity: 0; }
+  16%  { opacity: 1; }
+  40%  { transform: translate(690px, -28px) scale(1); }
+  70%  { transform: translate(915px, 18px) scale(1.02); }
+  100% { transform: translate(1120px, -8px) scale(1.06); opacity: 0.14; }
+}
+@keyframes pbFloatFlyL {
+  0%   { transform: translate(1120px, 0) scale(0.6); opacity: 0; }
+  16%  { opacity: 1; }
+  40%  { transform: translate(910px, -28px) scale(1); }
+  70%  { transform: translate(685px, 18px) scale(1.02); }
+  100% { transform: translate(480px, -8px) scale(1.06); opacity: 0.14; }
+}
+/* spin: tumbles end over end on its way in. */
+@keyframes pbSpinR {
+  0%   { transform: translate(480px, 0) rotate(0deg) scale(0.5); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translate(1120px, 0) rotate(540deg) scale(1.2); opacity: 0.12; }
+}
+@keyframes pbSpinL {
+  0%   { transform: translate(1120px, 0) rotate(0deg) scale(0.5); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translate(480px, 0) rotate(-540deg) scale(1.2); opacity: 0.12; }
+}
+
+/* Bubbles: soft rim and a faint inner highlight so they read as membranes, not
+   hard pills. The core gradient (inline) does the tint; this adds the surface. */
+.pb-bubble {
+  border-radius: 50%;
+  box-shadow:
+    inset -6px -9px 15px rgba(12, 74, 110, 0.22),
+    inset 8px 10px 17px rgba(255, 255, 255, 0.4),
+    0 0 12px rgba(255, 255, 255, 0.22);
+}
+.pb-bubble::before {
+  content: ''; position: absolute; top: 15%; left: 21%;
+  width: 27%; height: 23%; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  filter: blur(1px);
+}
+
+/* Muzzle flash at the shooter, tinted by the projectile's glow. */
+.pb-muzzle {
+  position: absolute; top: 540px; width: 190px; height: 190px;
+  margin: -95px 0 0 -95px; border-radius: 50%; pointer-events: none;
+  z-index: 35;
+  background: radial-gradient(circle, #fff 0%, var(--glow) 34%, transparent 68%);
+  animation: pbMuzzle calc(0.32s / var(--sp)) ease-out both;
+}
+@keyframes pbMuzzle {
+  0%   { opacity: 0.9; transform: scale(0.25); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+
+/* Reduced motion: no flight across the arena, just a quick fade in place. */
+@media (prefers-reduced-motion: reduce) {
+  .pb-proj--straight, .pb-proj--arc, .pb-proj--float, .pb-proj--spin,
+  .pb-proj--straight.pb-proj--l, .pb-proj--arc.pb-proj--l,
+  .pb-proj--float.pb-proj--l, .pb-proj--spin.pb-proj--l {
+    animation: pbProjFade calc(0.3s / var(--sp)) ease-out both;
+  }
+}
+@keyframes pbProjFade {
+  0%   { opacity: 0; transform: translate(800px, 0); }
+  35%  { opacity: 0.85; transform: translate(800px, 0); }
+  100% { opacity: 0; transform: translate(800px, 0); }
 }
 
 .pb-spark {
   position: absolute; top: 520px; width: 250px; height: 250px; margin: -125px 0 0 -125px;
-  border-radius: 50%; pointer-events: none;
+  border-radius: 50%; pointer-events: none; z-index: 35;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.92) 0%, rgba(255, 190, 90, 0.6) 30%, rgba(255, 140, 60, 0) 66%);
   animation: pbSpark calc(0.44s / var(--sp)) ease-out both;
 }

@@ -433,13 +433,39 @@ to, one bar per die, bar height = roll ÷ scale.
   so "low bar wins" reads backwards without the line — with it, no rules
   knowledge is needed. The same card covers the Paralyze and Cursed checks.
 
+### Projectiles
+
+Attacks that fly are **element-driven, not ability-driven**. A single registry
+(`ui/projectiles.js`) maps an attacker and its action to a projectile spec, and
+one resolver (`projectileFor`) decides on every beat whether the strike flies or
+lands as a jumping melee blow. The rule of thumb:
+
+- **Affinity Attackers throw their element on every attack**, standard or
+  Special — slinging fire, water, air or shadow is the whole role, so it never
+  switches off between big moves. A Hellhound bites embers; a Necrodoodle lobs
+  hexes; Watthog and the electric pets crack the same lightning bolt.
+- **Physical Tanks and brawlers stay melee** — they close the distance and hit.
+  A projectile on a bulwark pet reads wrong, so they lunge instead.
+- **Per-species and per-ability overrides win** over the role default. That is
+  how both Bubble Troubles lob bubbles (blue for the Affinity half, pink for the
+  Physical / Lovey half) even though one of them is a Tank, and how a one-off
+  ranged Special on an otherwise-melee pet still flies.
+
+The spec is pure presentation: an element tint, a `core` gradient for the body,
+a `motion` (flat dart, lobbed arc, slow bob, or tumbling spin), an optional
+`trail`, and a `count`/`spread` for flurries and sprays. The muzzle flash at the
+shooter and the impact burst are both recoloured from the same spec, so the shot
+and the hit read as one element. Nothing in the registry touches the engine —
+the projectile decision is entirely a matter of how a resolved attack is drawn.
+
 ### Motion policy
 
 Glows and flashes are reserved for impact: landing a hit, taking one, casting a
 Special, going down. Routine beats — charge ticks, status checks — get no sprite
 treatment at all, because a pet that lights up several times a turn reads as
 strobing rather than as emphasis. Neither pet is ever dimmed for not being the
-active one.
+active one. Projectile flights honour `prefers-reduced-motion`, collapsing to a
+quick fade in place rather than streaking across the arena.
 
 Floating combat text owns its own lifetime: a number is queued when its event
 fires and removes itself on `animationend`, rather than being tied to the
