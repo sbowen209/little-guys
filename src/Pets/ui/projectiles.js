@@ -261,9 +261,13 @@ export function projectileFor(species, action) {
     return PROJECTILES[ABILITY_PROJECTILE[action.ability]];
   }
 
-  // 2. A species that always throws the same thing (the Bubble Troubles).
-  if (SPECIES_PROJECTILE[species.id]) {
-    return PROJECTILES[SPECIES_PROJECTILE[species.id]];
+  // 2. A species that always throws the same thing (the Bubble Troubles). A
+  //    preset (Lovey, Dovey) inherits its base species' projectile via
+  //    baseSpeciesId, the same way it inherits passives and its Special.
+  const speciesProjectile = SPECIES_PROJECTILE[species.id]
+    ?? SPECIES_PROJECTILE[species.baseSpeciesId];
+  if (speciesProjectile) {
+    return PROJECTILES[speciesProjectile];
   }
 
   // 3. Affinity Attackers sling their element on every attack, standard or not.
