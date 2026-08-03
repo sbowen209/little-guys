@@ -114,7 +114,9 @@ export const ABILITIES = {
       const amount = ctx.rng.die(3) * 10;
       ctx.modStat(target, 'atkFlat', -amount, { source: self, label: 'Sunder' });
       if (ctx.rawAttackDie(target) <= 0) {
-        ctx.dealDamage(target, target.hp, { source: self, cause: 'Sundered', lethal: true });
+        // `attacker`, not `source` — it is what credits the knockout, so
+        // Famine Feast and Parting Quills both see who did this.
+        ctx.dealDamage(target, target.hp, { attacker: self, cause: 'Sundered' });
       }
     },
   },
@@ -139,11 +141,11 @@ export const ABILITIES = {
     name: 'Static Shock',
     kind: 'attack',
     cost: 100,
-    atkScale: 3,
+    atkScale: 4,
     damage: 2,
     element: ELEMENT.AIR,
     vfx: 'bolt',
-    desc: 'Rolls at 300% Max ATK. On a hit: 2 damage and inflicts Paralyzed.',
+    desc: 'Rolls at 400% Max ATK. On a hit: 2 damage and inflicts Paralyzed.',
     applyToTarget: [{ status: STATUS.PARALYZED, stacks: 1 }],
   },
 
@@ -239,8 +241,8 @@ export const ABILITIES = {
     cost: 100,
     element: ELEMENT.EARTH,
     vfx: 'bulwark',
-    desc: 'Gain 3 stacks of Zaptap — the next three hits taken are answered with 1 damage each.',
-    applyToSelf: [{ status: STATUS.ZAPTAP, stacks: 3 }],
+    desc: 'Gain 2 stacks of Zaptap — the next two hits taken are answered with 1 damage each.',
+    applyToSelf: [{ status: STATUS.ZAPTAP, stacks: 2 }],
   },
 
   haymaker: {
@@ -284,12 +286,12 @@ export const ABILITIES = {
     name: 'Lifesteal',
     kind: 'attack',
     cost: 100,
-    atkScale: 2,
+    atkScale: 3,
     damage: 1,
     element: ELEMENT.SHADOW,
     vfx: 'hex',
     lifesteal: true,
-    desc: 'Rolls at 200% Max ATK. On a hit: 1 damage healed back to you, then roll your Special die and siphon that much charge off the target.',
+    desc: 'Rolls at 300% Max ATK. On a hit: 1 damage healed back to you, then roll your Special die and siphon that much charge off the target.',
     onResolve: ({ ctx, self, target, hit }) => {
       if (!hit || !target || target.fainted) return;
       const stolen = Math.min(ctx.rng.die(self.stats.spc), target.spc);
@@ -304,16 +306,13 @@ export const ABILITIES = {
   thunderstorm: {
     id: 'thunderstorm',
     name: 'Thunderstorm',
-    kind: 'attack',
+    kind: 'effect',
     cost: 100,
-    atkScale: 2,
-    damage: 1,
     element: ELEMENT.AIR,
     vfx: 'bolt',
-    desc: 'Rolls at 200% Max ATK. On a hit: 1 damage. Gains 1 stack of Zaptap whether or not the strike lands.',
+    desc: 'The storm breaks: 2 Stun Counters on the opposing pet, and 1 stack of Zaptap for you.',
+    applyToTarget: [{ status: STATUS.STUN_COUNTER, stacks: 2 }],
     applyToSelf: [{ status: STATUS.ZAPTAP, stacks: 1 }],
-    /** The charge builds either way — the storm goes up regardless. */
-    selfEffectsOnMiss: true,
   },
 
   bone_gore: {
@@ -373,6 +372,78 @@ export const ABILITIES = {
     vfx: 'rend_slash',
     desc: 'Rolls at 200% Max ATK. On a hit: 2 damage and 2 stacks of Bleed.',
     applyToTarget: [{ status: STATUS.BLEED, stacks: 2 }],
+  },
+
+  /* ══ FOURTH WAVE ═══════════════════════════════════════════════════ */
+
+  sonic_boom: {
+    id: 'sonic_boom',
+    name: 'Sonic Boom',
+    kind: 'effect',
+    cost: 100,
+    element: ELEMENT.WATER,
+    vfx: 'shriek',
+    desc: 'Stuns a random benched enemy outright. With the bench empty it hits the pet in front instead.',
+    onResolve: ({ ctx, self, target }) => {
+      const bench = ctx.benchedFoesOf(self);
+      const victim = bench.length ? ctx.rng.pick(bench) : target;
+      if (!victim || victim.fainted) return;
+      ctx.applyStatus(victim, STATUS.STUNNED, 1, { source: self, label: 'Sonic Boom' });
+    },
+  },
+
+  sever: {
+    id: 'sever',
+    name: 'Sever',
+    provisional: true,
+    kind: 'attack',
+    cost: 100,
+    atkScale: 2,
+    damage: 2,
+    element: ELEMENT.PHYSICAL,
+    vfx: 'rend_slash',
+    desc: 'Rolls at 200% Max ATK. On a hit: 2 damage — and if it finishes the target, the next enemy to take the field arrives with 2 stacks of Sliced.',
+    onResolve: ({ ctx, self, target, hit }) => {
+      // Only a kill sets the trap; the replacement walks into the blades.
+      if (!hit || !target || !target.fainted) return;
+      ctx.queueSwitchInBonus(target.side, {
+        status: { id: STATUS.SLICED, stacks: 2 },
+        source: self,
+        label: 'Sever',
+      });
+    },
+  },
+
+  static_charge: {
+    id: 'static_charge',
+    name: 'Static Charge',
+    provisional: true,
+    kind: 'effect',
+    cost: 100,
+    element: ELEMENT.AIR,
+    vfx: 'bolt',
+    desc: 'Gain 1 stack of Zaptap and +5 Max ATK permanently.',
+    applyToSelf: [{ status: STATUS.ZAPTAP, stacks: 1 }],
+    onResolve: ({ ctx, self }) => {
+      ctx.modStat(self, 'atkFlat', 5, { label: 'Static Charge' });
+    },
+  },
+
+  toxic_spray: {
+    id: 'toxic_spray',
+    name: 'Toxic Spray',
+    provisional: true,
+    kind: 'effect',
+    cost: 100,
+    element: ELEMENT.EARTH,
+    vfx: 'flare',
+    desc: 'A random benched enemy gains 1 stack of Poison. With the bench empty it lands on the pet in front instead.',
+    onResolve: ({ ctx, self, target }) => {
+      const bench = ctx.benchedFoesOf(self);
+      const victim = bench.length ? ctx.rng.pick(bench) : target;
+      if (!victim || victim.fainted) return;
+      ctx.applyStatus(victim, STATUS.POISON, 1, { source: self, label: 'Toxic Spray' });
+    },
   },
 };
 

@@ -21,6 +21,9 @@
  *   spcMult           multiplier on the Special die size for the roll
  *   tickOnTurn        { dieSize, procValues, damage, clearOnProc } rolled per stack
  *                     at the owner's turn start
+ *   amplifyOnDamaged  { dieSize, procValues, damage, consume } rolled ONCE when an
+ *                     attack damages the owner; on a proc the owner takes `damage`
+ *                     more and loses `consume` stacks
  *
  * ── DECLARATIVE EXPIRY ─────────────────────────────────────────────
  *   consumeOnAttack   stacks removed after the owner attacks, hit or miss
@@ -55,6 +58,8 @@ export const STATUS = {
   POWERFUL: 'powerful',
   BLEED: 'bleed',
   BONE_SHIELD: 'bone_shield',
+  POISON: 'poison',
+  SLICED: 'sliced',
 };
 
 export const STATUS_DEFS = {
@@ -119,9 +124,11 @@ export const STATUS_DEFS = {
     name: 'Stunned',
     icon: '😵',
     kind: 'debuff',
-    stackable: false,
+    /** Stacks: a second Stun costs a second turn rather than being swallowed.
+     *  One stack is spent per turn skipped. */
+    stackable: true,
     tone: '#a8a29e',
-    desc: 'Skip your next turn entirely.',
+    desc: 'Skip your next turn entirely, Special charge included. One stack is spent per turn lost.',
   },
   [STATUS.BUBBLE_SHIELD]: {
     id: STATUS.BUBBLE_SHIELD,
@@ -139,7 +146,14 @@ export const STATUS_DEFS = {
     kind: 'debuff',
     stackable: true,
     tone: '#60a5fa',
-    desc: 'Max DEF reduced by 5 per stack. Cleared when you take damage.',
+    /**
+     * Two flavours, because the cards disagree on purpose. A soaking from a
+     * popped Bubble Shield is permanent; the stacks Wear Down grinds onto an
+     * attacker wash off the moment that attacker takes a hit. The applier says
+     * which by passing `washable`, and the engine tracks the washable share of
+     * the stack count separately.
+     */
+    desc: 'Max DEF reduced by 5 per stack. A Bubble Shield soaking is permanent; Wear Down\'s stacks wash off when you take damage.',
   },
   [STATUS.SHED]: {
     id: STATUS.SHED,
@@ -248,6 +262,27 @@ export const STATUS_DEFS = {
     desc: 'Grants +5 Max DEF per stack. One stack is stripped whenever an attack damages you.',
     defBonus: 5,
     consumeOnDamaged: 1,
+  },
+  [STATUS.POISON]: {
+    id: STATUS.POISON,
+    name: 'Poison',
+    icon: '☠️',
+    kind: 'debuff',
+    stackable: true,
+    tone: '#84cc16',
+    /** Burn-shaped, but the stack is NOT spent when it fires — poison stays. */
+    desc: 'At the start of your turn, roll 1d6 per stack. Each 1 deals 1 damage. Stacks never wear off.',
+    tickOnTurn: { dieSize: 6, procValues: [1], damage: 1, clearOnProc: false },
+  },
+  [STATUS.SLICED]: {
+    id: STATUS.SLICED,
+    name: 'Sliced',
+    icon: '✂️',
+    kind: 'debuff',
+    stackable: true,
+    tone: '#22d3ee',
+    desc: 'When an attack damages you, a 50% chance to spend a stack and take 1 more damage.',
+    amplifyOnDamaged: { dieSize: 2, procValues: [1], damage: 1, consume: 1 },
   },
 };
 

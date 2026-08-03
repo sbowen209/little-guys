@@ -120,7 +120,9 @@ function Projectile({ spec, side }) {
  * Owns the seed and nothing else. Each rematch produces a new `result`, and
  * keying the stage on it remounts the playback state instead of unwinding it.
  */
-export default function BattleArena({ battleConfig, onExit }) {
+export default function BattleArena({
+  battleConfig, onExit, onResolved, onComplete, continueLabel, sideNames, exitLabel, playerSide,
+}) {
   const [seed, setSeed] = useState(() => randomSeed());
   const rematch = useCallback(() => setSeed(randomSeed()), []);
 
@@ -132,10 +134,26 @@ export default function BattleArena({ battleConfig, onExit }) {
   }, [battleConfig, seed]);
 
   if (!result) return null;
-  return <BattleStage key={seed} result={result} onRematch={rematch} onExit={onExit} />;
+  return (
+    <BattleStage
+      key={seed}
+      result={result}
+      onRematch={rematch}
+      onExit={onExit}
+      onResolved={onResolved}
+      onComplete={onComplete}
+      continueLabel={continueLabel}
+      sideNames={sideNames}
+      exitLabel={exitLabel}
+      playerSide={playerSide}
+    />
+  );
 }
 
-function BattleStage({ result, onRematch, onExit }) {
+function BattleStage({
+  result, onRematch, onExit, onResolved, onComplete,
+  continueLabel, sideNames, exitLabel, playerSide,
+}) {
   const [showLog, setShowLog] = useState(false);
   const [stageRef, scale] = useStageScale();
 
@@ -170,6 +188,19 @@ function BattleStage({ result, onRematch, onExit }) {
   }, [togglePaused, setSpeed, step, onExit]);
 
   const toggleLog = useCallback(() => setShowLog((value) => !value), []);
+
+  /**
+   * The match is over as data long before it is over on screen, but the ledger
+   * should reflect what the player watched. Fired exactly once per playthrough —
+   * the ref guards against the effect re-running when the callback identity
+   * changes, which would otherwise post the same result twice.
+   */
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!finished || reported.current) return;
+    reported.current = true;
+    onResolved?.(result);
+  }, [finished, onResolved, result]);
 
   const action = useMemo(() => (timeline ? currentAction(timeline, index) : null), [timeline, index]);
   const anims = useMemo(() => animationsFor(event, action), [event, action]);
@@ -301,6 +332,11 @@ function BattleStage({ result, onRematch, onExit }) {
                   state={timeline[timeline.length - 1].state}
                   onRematch={onRematch}
                   onExit={onExit}
+                  onContinue={onComplete ? () => onComplete(result) : undefined}
+                  continueLabel={continueLabel}
+                  sideNames={sideNames}
+                  exitLabel={exitLabel}
+                  playerSide={playerSide}
                 />
               )}
             </div>

@@ -12,12 +12,12 @@
 import { createRng, randomSeed } from './rng.js';
 import {
   createCombatant, snapshotPet, stacksOf, hasStatus, addStacks, removeStacks,
-  blocksStatus, attackDie, defenseDie, rawAttackDie,
+  blocksStatus, immunityLabel, attackDie, defenseDie, rawAttackDie,
   statusesWith, statusDamageFloor, specialBlocked, statusThorns, spcRollPlan,
 } from './combatant.js';
 import { EV } from './events.js';
 import {
-  RULES, ROLE, STATUS, STATUS_DEFS, statusDef, isDebuff,
+  RULES, ROLE, STATUS, STATUS_DEFS, statusDef, isDebuff, fieldDef,
   ATTACK_ROLE_ADVANTAGE, DEFENSE_ROLE_ADVANTAGE, affinityVerdict, otherSide,
 } from '../data/index.js';
 
@@ -37,6 +37,8 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
   const lead = [0, 0];
   const timeline = [];
   const switchInBonus = [null, null];
+  /** Arena-wide conditions, once established they run to the final bell. */
+  const fields = new Set();
 
   let eventId = 0;
   let turnCount = 0;
@@ -51,6 +53,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     lead: [lead[0], lead[1]],
     teams: [sides[0].map(snapshotPet), sides[1].map(snapshotPet)],
     turn: turnCount,
+    fields: [...fields],
     // The stall clock, so the HUD can show how close Stagnation is without
     // re-deriving the rule.
     stagnation: {
@@ -141,12 +144,12 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
 
   /* ── STATUSES ──────────────────────────────────────────────────── */
 
-  const applyStatus = (target, id, stacks = 1, { source = null, label = null } = {}) => {
+  const applyStatus = (target, id, stacks = 1, { source = null, label = null, washable = false } = {}) => {
     if (!target || target.fainted || stacks <= 0) return false;
 
     if (blocksStatus(target, id)) {
       emit(EV.PASSIVE, {
-        side: target.side, slot: target.slot, label: 'Thick Fur',
+        side: target.side, slot: target.slot, label: immunityLabel(target, id),
         text: 'IMMUNE', tone: 'defend', hold: 420,
       });
       return false;
@@ -155,6 +158,16 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     const meta = {};
     // Stamped so the end-of-turn decay can spare a curse applied this turn.
     if (id === STATUS.CURSED) meta.appliedOn = turnCount;
+    /**
+     * Damp comes in two flavours and the applier picks. Wear Down grinds
+     * `washable` stacks onto an attacker that rinse off the next time that
+     * attacker takes a hit; the soaking a popped Bubble Shield leaves is
+     * permanent. Tracking the washable share separately is what lets one status
+     * carry both without the HUD showing two near-identical icons.
+     */
+    if (id === STATUS.DAMP && washable) {
+      meta.washable = (target.statuses[id]?.washable ?? 0) + stacks;
+    }
     if (id === STATUS.BURN) {
       const potency = best(source, 'burnPotency', STATUS_DEFS[STATUS.BURN].defaultPotency);
       meta.potency = Math.max(target.statuses[id]?.potency ?? 0, potency);
@@ -205,23 +218,59 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
 
   /* ── HEALTH ────────────────────────────────────────────────────── */
 
+  /**
+   * Statuses that widen a wound as it lands (Sliced). Rolled once per incoming
+   * attack, before the damage is applied, so the extra shows up as one larger
+   * number rather than a second hit.
+   */
+  const amplifyIncoming = (target) => {
+    let extra = 0;
+    for (const { id, def } of statusesWith(target, 'amplifyOnDamaged')) {
+      const spec = def.amplifyOnDamaged;
+      const roll = rng.die(spec.dieSize);
+      const proc = spec.procValues.includes(roll);
+
+      emit(EV.STATUS_TICK, {
+        side: target.side, slot: target.slot, status: id, name: def.name,
+        dieSize: spec.dieSize, rolls: [roll], procValues: spec.procValues,
+        damage: proc ? spec.damage : 0, cleared: proc ? spec.consume : 0,
+      });
+
+      if (!proc) continue;
+      removeStacks(target, id, spec.consume);
+      extra += spec.damage;
+    }
+    return extra;
+  };
+
+  /** Rinses off only the Damp stacks that were applied as washable. */
+  const washDamp = (target) => {
+    const entry = target.statuses[STATUS.DAMP];
+    if (!entry?.washable) return;
+    const count = Math.min(entry.washable, entry.stacks);
+    entry.washable = 0;
+    if (count > 0) expireStatus(target, STATUS.DAMP, count);
+  };
+
   const dealDamage = (target, amount, { attacker = null, cause = null, fromAttack = false } = {}) => {
     if (!target || target.fainted || amount <= 0) return 0;
+
+    if (fromAttack) amount += amplifyIncoming(target);
 
     const before = target.hp;
     target.hp = Math.max(0, target.hp - amount);
     const dealt = before - target.hp;
+    const downed = target.hp === 0;
 
     emit(EV.IMPACT, {
       side: target.side, slot: target.slot, amount: dealt,
       hpAfter: target.hp, cause, fromAttack,
-      lethal: target.hp === 0,
+      lethal: downed,
     });
 
-    // Damp washes off the moment you actually take a hit.
-    if (hasStatus(target, STATUS.DAMP)) expireStatus(target, STATUS.DAMP, stacksOf(target, STATUS.DAMP));
+    washDamp(target);
 
-    // A popped shield leaves the attacker Damp.
+    // A popped shield leaves the attacker Damp — permanently, unlike Wear Down's.
     if (hasStatus(target, STATUS.BUBBLE_SHIELD)) {
       expireStatus(target, STATUS.BUBBLE_SHIELD, 1);
       fire(target, 'onShieldPopped', { attacker });
@@ -230,15 +279,26 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       }
     }
 
-    if (target.hp === 0) {
+    // Marked down before the reactions run, so anything a dying pet would apply
+    // to ITSELF quietly no-ops (applyStatus, gainSpc and heal all refuse a
+    // fainted pet) while everything it aims outward still lands.
+    if (downed) {
       target.fainted = true;
       target.killedBy = attacker ?? null;
-      if (attacker && !attacker.fainted) fire(attacker, 'onKO', { target });
-    } else if (fromAttack) {
+    }
+
+    /**
+     * Reactions fire even when the blow was fatal. "When damaged" means exactly
+     * that: Zaptap answers the pet that just killed it, Flame Aura still burns
+     * the killer, Bonecrusher still cracks their shell. Skipping all of it on a
+     * lethal hit made every on-damage effect quietly unreliable — the last hit
+     * of a fight is the one that most needs to be paid for.
+     */
+    if (fromAttack) {
       fire(target, 'onDamaged', { attacker, amount: dealt });
 
-      // Thorns statuses answer the attacker, then spend a stack. The reflected
-      // hit is not itself an attack, so a pair of thorned pets cannot loop.
+      // Thorns answer the attacker, then spend a stack. The reflected hit is
+      // not itself an attack, so a pair of thorned pets cannot loop.
       if (attacker && !attacker.fainted && statusThorns(target) > 0) {
         for (const { def } of statusesWith(target, 'thorns')) {
           dealDamage(attacker, def.thorns, { cause: def.name });
@@ -246,6 +306,10 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       }
       consumeStatuses(target, 'consumeOnDamaged');
     }
+
+    // Last, so a killer that got itself killed on the way in (thorns, Parting
+    // Quills) does not also collect the bounty.
+    if (downed && attacker && !attacker.fainted) fire(attacker, 'onKO', { target });
 
     return dealt;
   };
@@ -300,6 +364,8 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     /** The whole opposing roster, fainted included — for counting losses. */
     foesOf: (pet) => sides[otherSide(pet.side)],
     queueSwitchInBonus: (side, bonus) => { switchInBonus[side] = bonus; },
+    /** Turns on an arena-wide condition for the rest of the match. */
+    establishField: (id, label) => establishField(id, label),
     /** Awards Healer charge from outside a successful attack. */
     addHeartCounters: (pet, count, label) => awardHeartCounters(pet, count, label),
     /** Washes off every debuff at once. Buffs and system statuses are left alone. */
@@ -661,6 +727,27 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     emit(EV.STAGNATION, { stacks: stacksOf(active(0), STATUS.STAGNATION) });
   };
 
+  /* ── FIELD EFFECTS ─────────────────────────────────────────────── */
+
+  /**
+   * A field belongs to the arena, not to the pet that set it: it survives that
+   * pet leaving or dying, is never cleansed, and applies to both sides. Setting
+   * one that is already up is a no-op, so a Legendary passive re-entering the
+   * field does not re-announce it.
+   */
+  const establishField = (id, label) => {
+    if (fields.has(id)) return false;
+    fields.add(id);
+    const def = fieldDef(id);
+    emit(EV.FIELD, { field: id, name: def?.name ?? id, icon: def?.icon, desc: def?.desc, label });
+    return true;
+  };
+
+  const runFieldTurnEnd = (pet) => {
+    if (!pet || pet.fainted) return;
+    for (const id of fields) fieldDef(id)?.hooks?.onTurnEnd?.({ ctx, pet });
+  };
+
   const clearStagnation = () => {
     stagnationCounter = 0;
     for (const side of sides) for (const pet of side) delete pet.statuses[STATUS.STAGNATION];
@@ -703,6 +790,11 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     flushSpc();
     if (bonus?.heal) heal(next, bonus.heal, { label: bonus.label, overheal: bonus.overheal });
     if (bonus?.spc) gainSpc(next, bonus.spc, bonus.label ?? 'switch-in');
+    if (bonus?.status) {
+      applyStatus(next, bonus.status.id, bonus.status.stacks ?? 1, {
+        source: bonus.source ?? null, label: bonus.label,
+      });
+    }
 
     next.hasEntered = true;
     next.turnsInPlay = 0;
@@ -858,6 +950,8 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     decayCurse(turnSide);
     // Statuses measured in turns rather than in uses fall off here.
     if (!active(turnSide).fainted) consumeStatuses(active(turnSide), 'expireAtTurnEnd');
+    // ...and whatever the arena itself does between turns.
+    runFieldTurnEnd(active(turnSide));
 
     const switched = processFaints();
     if (!alive(0) || !alive(1)) break;

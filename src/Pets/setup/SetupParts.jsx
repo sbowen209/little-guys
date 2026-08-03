@@ -74,22 +74,139 @@ export function StatBadge({ icon, label, value, tone, highlighted, editing, onIn
   );
 }
 
+/* ── TUNING BAR ──────────────────────────────────────────────────── */
+
+const CTRL = 'flex items-center justify-center rounded-md border transition-all disabled:cursor-not-allowed disabled:opacity-25';
+
+/**
+ * Everything you do to a drafted pet, in one strip.
+ *
+ * The old builder put a single "Level up" button next to a Manual Balance
+ * toggle, so taking a level back was impossible and re-rolling a bad Nature
+ * meant deleting the pet and drafting a new one. Levels are now a stepper and
+ * Natures have a re-roll, which is only safe because every edit is itemised on
+ * the instance (see data/index.js) rather than folded into a final stat line.
+ */
+export function TuningBar({
+  level, minLevel, maxLevel, isPreset, ace,
+  onLevelUp, onLevelDown, onReroll, onToggleAce, tuning, onToggleTuning,
+}) {
+  return (
+    <div className="mb-8 flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-1 rounded-lg border border-stone-700 bg-stone-900/70 p-1">
+        <button
+          type="button"
+          onClick={onLevelDown}
+          disabled={level <= minLevel}
+          title={level <= minLevel ? 'Already at its starting level' : 'Take back the last level, and the die it granted'}
+          className={`${CTRL} h-9 w-9 border-transparent text-lg text-stone-400 hover:border-rose-500/50 hover:bg-rose-500/10 hover:text-rose-300`}
+        >
+          −
+        </button>
+        <div className="flex min-w-[86px] flex-col items-center px-1">
+          <span className="font-mono text-[8px] uppercase tracking-widest text-stone-500">Level</span>
+          <span className="font-mono text-lg font-black leading-none text-white tabular-nums">
+            {level}
+            <span className="text-xs text-stone-600">/{maxLevel}</span>
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onLevelUp}
+          disabled={level >= maxLevel}
+          title={level >= maxLevel ? 'Max level' : 'Level up: 1d4 to one random die'}
+          className={`${CTRL} h-9 w-9 border-transparent text-lg text-stone-400 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300`}
+        >
+          +
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={onReroll}
+        disabled={isPreset}
+        title={isPreset ? 'A preset\'s Natures are authored and never re-roll' : 'Roll all three Natures again'}
+        className={`${CTRL} h-11 gap-2 border-stone-700 bg-stone-900/70 px-4 font-mono text-xs font-bold uppercase tracking-widest text-stone-400 hover:border-sky-500 hover:text-sky-300`}
+      >
+        ⟳ Reroll Natures
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggleAce}
+        disabled={isPreset}
+        title={isPreset
+          ? 'A preset already has its authored stat line'
+          : 'Ace: every Nature rolls positive. Toggling re-rolls them now.'}
+        className={`${CTRL} h-11 gap-2 px-4 font-mono text-xs font-black uppercase tracking-widest ${
+          ace
+            ? 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.35)]'
+            : 'border-stone-700 bg-stone-900/70 text-stone-400 hover:border-amber-500/60 hover:text-amber-300'
+        }`}
+      >
+        ★ Ace
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggleTuning}
+        title="Spend or give back earned level-ups, one point at a time"
+        className={`${CTRL} h-11 px-4 font-mono text-xs font-bold uppercase tracking-widest ${
+          tuning
+            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
+            : 'border-stone-700 bg-stone-900/70 text-stone-400 hover:border-stone-500 hover:text-white'
+        }`}
+      >
+        {tuning ? '⚖ Done' : '⚖ Manual balance'}
+      </button>
+    </div>
+  );
+}
+
+/** The Ace switch as it appears on the library card, before a pet is drafted. */
+export function AceToggle({ ace, onToggle, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      title={disabled
+        ? 'Presets ship with an authored stat line, so Ace does not apply'
+        : 'Draft this pet with every Nature guaranteed positive'}
+      className={`${CTRL} h-11 gap-2 px-4 font-mono text-xs font-black uppercase tracking-widest ${
+        ace
+          ? 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.35)]'
+          : 'border-stone-700 bg-stone-900/70 text-stone-500 hover:border-amber-500/60 hover:text-amber-300'
+      }`}
+    >
+      ★ Ace {ace ? 'on' : 'off'}
+    </button>
+  );
+}
+
 /* ── KIT (SPECIAL + PASSIVES) ────────────────────────────────────── */
 
 function KitRow({ title, body, state }) {
   const styles = {
     special: 'border-amber-500/50 bg-amber-950/20 shadow-[0_0_15px_rgba(251,191,36,0.14)]',
+    legendary: 'border-fuchsia-500/50 bg-fuchsia-950/20 shadow-[0_0_15px_rgba(217,70,239,0.16)]',
     active: 'border-stone-800/60 bg-stone-900/80',
     locked: 'border-stone-800/60 bg-stone-950/50 opacity-60 grayscale-[0.5]',
   };
-  const marks = { special: '✨', active: '✦', locked: '🔒' };
-  const titleColor = { special: 'text-amber-400', active: 'text-stone-100', locked: 'text-stone-500' };
-  const bodyColor = { special: 'text-amber-200/80', active: 'text-stone-400', locked: 'text-stone-600' };
+  const marks = { special: '✨', legendary: '👑', active: '✦', locked: '🔒' };
+  const titleColor = {
+    special: 'text-amber-400', legendary: 'text-fuchsia-300',
+    active: 'text-stone-100', locked: 'text-stone-500',
+  };
+  const bodyColor = {
+    special: 'text-amber-200/80', legendary: 'text-fuchsia-200/80',
+    active: 'text-stone-400', locked: 'text-stone-600',
+  };
 
   return (
     <li className={`rounded-lg border px-4 py-3 backdrop-blur-sm transition-all ${styles[state]}`}>
       <div className="flex items-center gap-2">
-        <span className={state === 'special' ? 'text-amber-400' : 'text-stone-600'}>{marks[state]}</span>
+        <span className={state === 'special' || state === 'legendary' ? titleColor[state] : 'text-stone-600'}>{marks[state]}</span>
         <span className={`font-serif font-bold tracking-wide ${titleColor[state]}`}>{title}</span>
       </div>
       <p className={`mt-1 pl-6 text-sm leading-snug ${bodyColor[state]}`}>{body}</p>
@@ -115,11 +232,14 @@ export const KitPanel = memo(function KitPanel({ species, level }) {
         {(species.passives ?? []).map((id) => {
           const passive = PASSIVES[id];
           const unlocked = level >= passive.level;
+          const state = passive.legendary ? 'legendary' : unlocked ? 'active' : 'locked';
           return (
             <KitRow
               key={id}
-              state={unlocked ? 'active' : 'locked'}
-              title={unlocked ? passive.name : `${passive.name} — unlocks at Lv.${passive.level}`}
+              state={unlocked ? state : 'locked'}
+              title={unlocked
+                ? `${passive.name}${passive.legendary ? ' — Legendary' : ''}`
+                : `${passive.name} — unlocks at Lv.${passive.level}`}
               body={passive.desc}
             />
           );

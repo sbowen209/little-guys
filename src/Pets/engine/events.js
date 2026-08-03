@@ -23,6 +23,7 @@ export const EV = {
   STAT_MOD: 'stat_mod',
   PASSIVE: 'passive',
   STAGNATION: 'stagnation',
+  FIELD: 'field',
   FAINT: 'faint',
   BATTLE_END: 'battle_end',
 };
@@ -49,6 +50,7 @@ export const HOLD = {
   [EV.STAT_MOD]: 540,
   [EV.PASSIVE]: 620,
   [EV.STAGNATION]: 900,
+  [EV.FIELD]: 1100,
   [EV.FAINT]: 1200,
   [EV.BATTLE_END]: 2200,
 };

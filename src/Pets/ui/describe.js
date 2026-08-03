@@ -46,13 +46,20 @@ export function tickerFor(event) {
     case EV.TURN_START:
       return { text: `${who()}'s turn.`, hot: false };
 
-    case EV.STATUS_TICK:
+    case EV.STATUS_TICK: {
+      // Named after whichever status is rolling, rather than assuming Burn —
+      // Bleed, Poison and Sliced all come through here now.
+      const label = event.name ?? 'The effect';
+      if (event.skipped !== undefined || event.nullified !== undefined) {
+        return { text: `${who()} · ${label} check.`, hot: Boolean(event.skipped || event.nullified) };
+      }
       return {
         text: event.damage > 0
-          ? `${who()} burns for ${event.damage} — ${event.cleared} stack${event.cleared === 1 ? '' : 's'} spent.`
-          : `${who()} shrugs off the flames.`,
+          ? `${label} bites ${who()} for ${event.damage}${event.cleared > 0 ? ` — ${event.cleared} stack${event.cleared === 1 ? '' : 's'} spent` : ''}.`
+          : `${who()} shrugs off ${label}.`,
         hot: event.damage > 0,
       };
+    }
 
     case EV.SKIP:
       return { text: `${who()} is ${event.reason} and loses the turn.`, hot: true };
@@ -102,6 +109,9 @@ export function tickerFor(event) {
     case EV.STAGNATION:
       return { text: 'Stagnation — the crowd turns. Both pets lose defence.', hot: true };
 
+    case EV.FIELD:
+      return { text: `${event.name} settles over the arena — it is here for the rest of the match.`, hot: true };
+
     case EV.FAINT:
       return { text: `${event.name} is knocked out.`, hot: true };
 
@@ -124,7 +134,7 @@ export function tickerFor(event) {
 const LOGGED = new Set([
   EV.INITIATIVE, EV.ACTION, EV.ROLL, EV.IMPACT, EV.BLOCK, EV.HEAL,
   EV.STATUS_APPLY, EV.STATUS_TICK, EV.SKIP, EV.STAT_MOD, EV.FAINT,
-  EV.SWITCH_IN, EV.STAGNATION, EV.PASSIVE, EV.BATTLE_END,
+  EV.SWITCH_IN, EV.STAGNATION, EV.FIELD, EV.PASSIVE, EV.BATTLE_END,
 ]);
 
 export const isLogged = (event) => LOGGED.has(event.type);

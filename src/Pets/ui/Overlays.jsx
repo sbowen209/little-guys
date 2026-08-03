@@ -28,20 +28,38 @@ export const OpeningSplash = memo(function OpeningSplash({ state }) {
   );
 });
 
-/** End card: who won, who was left standing, and what to do next. */
-export const ResultOverlay = memo(function ResultOverlay({ outcome, state, onRematch, onExit }) {
+/**
+ * End card: who won, who was left standing, and what to do next.
+ *
+ * `sideNames` lets a gauntlet name the squads instead of "Player 1"; `onContinue`
+ * replaces Rematch when the match is one leg of a series, because re-rolling a
+ * result you are about to carry forward is not a thing you should be offered.
+ */
+export const ResultOverlay = memo(function ResultOverlay({
+  outcome, state, onRematch, onExit, onContinue, continueLabel, sideNames, exitLabel, playerSide,
+}) {
   const draw = outcome.winner === null;
   const bothWiped = outcome.reason === 'double_knockout';
   const survivors = draw
     ? []
     : state.teams[outcome.winner].filter((pet) => !pet.fainted);
+  const winnerName = draw ? null : sideNames?.[outcome.winner] ?? `Player ${outcome.winner + 1}`;
+
+  // In an exhibition duel both sides are the player's, so a win is simply a
+  // win. In a gauntlet one side is theirs, and calling their loss "Victory"
+  // because somebody won would read as a taunt.
+  const title = draw
+    ? 'Draw'
+    : playerSide === undefined
+      ? 'Victory'
+      : outcome.winner === playerSide ? 'Victory' : 'Defeat';
 
   return (
     <div className="pb-result">
       <span className="pb-result__kicker">
-        {draw ? (bothWiped ? 'Nobody left standing' : 'Stalemate') : `Player ${outcome.winner + 1} wins`}
+        {draw ? (bothWiped ? 'Nobody left standing' : 'Stalemate') : `${winnerName} wins`}
       </span>
-      <span className="pb-result__title">{draw ? 'Draw' : 'Victory'}</span>
+      <span className="pb-result__title">{title}</span>
       <span className="pb-result__stat">
         {outcome.turns} turns · {draw
           ? (bothWiped ? 'both teams wiped out' : 'turn limit reached')
@@ -60,8 +78,10 @@ export const ResultOverlay = memo(function ResultOverlay({ outcome, state, onRem
       )}
 
       <div className="pb-result__actions">
-        <button className="pb-cta pb-cta--primary" onClick={onRematch}>Rematch</button>
-        <button className="pb-cta pb-cta--ghost" onClick={onExit}>Back to Setup</button>
+        {onContinue
+          ? <button className="pb-cta pb-cta--primary" onClick={onContinue}>{continueLabel ?? 'Continue'}</button>
+          : <button className="pb-cta pb-cta--primary" onClick={onRematch}>Rematch</button>}
+        <button className="pb-cta pb-cta--ghost" onClick={onExit}>{exitLabel ?? 'Back to Setup'}</button>
       </div>
     </div>
   );

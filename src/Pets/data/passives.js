@@ -46,11 +46,21 @@
  * `ctx.heal(pet, n, { label, overheal })` — `overheal: true` carries a pet past
  * its Max HP, and the nameplate grows extra hearts to show the surplus.
  *
+ * `ctx.establishField(fieldId, label)` — turns on an arena-wide condition from
+ * data/fields.js for the rest of the match.
+ *
+ * `self.memo` is a plain scratch object per combatant. A passive that has to
+ * remember something across turns (which enemies it has already hit, say) keeps
+ * it there, so the engine never grows a field for one pet's bookkeeping.
+ *
  * Flags (not hooks):
  *   debuffImmune  true -> the pet cannot receive statuses of kind 'debuff'
+ *   legendary     true -> always online, and labelled as such in the builder
+ *   statusImmune  [statusId] -> the pet refuses exactly these statuses
  */
 
 import { STATUS } from './statuses.js';
+import { FIELD } from './fields.js';
 import { ROLE, RULES } from './constants.js';
 
 export const PASSIVES = {
@@ -59,10 +69,9 @@ export const PASSIVES = {
     id: 'hellfire',
     name: 'Hellfire',
     level: 1,
-    desc: 'Successful standard attacks have a 1/6 chance to inflict Burn.',
+    desc: 'Successful attacks have a 1/6 chance to inflict Burn.',
     hooks: {
-      onAttackHit: ({ ctx, self, target, isSpecial }) => {
-        if (isSpecial) return;
+      onAttackHit: ({ ctx, self, target }) => {
         if (ctx.rng.die(6) === 1) {
           ctx.applyStatus(target, STATUS.BURN, 1, { source: self, label: 'Hellfire' });
         }
@@ -146,11 +155,11 @@ export const PASSIVES = {
     id: 'capitalize',
     name: 'Capitalize',
     level: 5,
-    desc: 'When you Stun an opponent they also take 1 damage and lose all Special charge.',
+    desc: 'When you Stun an opponent they also take 1 damage and lose 50 Special charge.',
     hooks: {
       onStunned: ({ ctx, self, target }) => {
-        ctx.dealDamage(target, 1, { source: self, cause: 'Capitalize' });
-        ctx.setSpc(target, 0, 'Capitalize');
+        ctx.dealDamage(target, 1, { attacker: self, cause: 'Capitalize' });
+        ctx.setSpc(target, target.spc - 50, 'Capitalize');
       },
     },
   },
@@ -178,10 +187,9 @@ export const PASSIVES = {
     id: 'hex_claws',
     name: 'Hex Claws',
     level: 1,
-    desc: 'Successful standard attacks have a 25% chance to inflict 1 stack of Cursed.',
+    desc: 'Successful attacks have a 25% chance to inflict 1 stack of Cursed.',
     hooks: {
-      onAttackHit: ({ ctx, self, target, isSpecial }) => {
-        if (isSpecial) return;
+      onAttackHit: ({ ctx, self, target }) => {
         if (ctx.rng.die(4) === 1) {
           ctx.applyStatus(target, STATUS.CURSED, 1, { source: self, label: 'Hex Claws' });
         }
@@ -353,10 +361,10 @@ export const PASSIVES = {
     name: 'Second Stomach',
     provisional: true,
     level: 5,
-    desc: 'At the start of your turn, a 1-in-10 chance to recover 1 heart.',
+    desc: 'At the start of your turn, a 1-in-6 chance to recover 1 heart.',
     hooks: {
       onTurnStart: ({ ctx, self }) => {
-        if (ctx.rng.die(10) === 1) ctx.heal(self, 1, { label: 'Second Stomach' });
+        if (ctx.rng.die(6) === 1) ctx.heal(self, 1, { label: 'Second Stomach' });
       },
     },
   },
@@ -522,12 +530,12 @@ export const PASSIVES = {
     name: 'Stage Fright',
     provisional: true,
     level: 5,
-    desc: 'When you take the field, the opposing pet gains 5 stacks of Stunt.',
+    desc: 'When you take the field, the opposing pet gains 99 stacks of Stunt — its Special is locked for the rest of the match.',
     hooks: {
       onEnterField: ({ ctx, self }) => {
         const foe = ctx.activeFoeOf(self);
         if (foe && !foe.fainted) {
-          ctx.applyStatus(foe, STATUS.STUNT, 5, { source: self, label: 'Stage Fright' });
+          ctx.applyStatus(foe, STATUS.STUNT, 99, { source: self, label: 'Stage Fright' });
         }
       },
     },
@@ -553,10 +561,10 @@ export const PASSIVES = {
     id: 'electrocyclone',
     name: 'Electrocyclone',
     level: 5,
-    desc: 'When damaged, 25% chance to gain 1 stack of Zaptap.',
+    desc: 'When damaged, a 1/6 chance to gain 1 stack of Zaptap.',
     hooks: {
       onDamaged: ({ ctx, self }) => {
-        if (ctx.rng.die(4) === 1) {
+        if (ctx.rng.die(6) === 1) {
           ctx.applyStatus(self, STATUS.ZAPTAP, 1, { source: self, label: 'Electrocyclone' });
         }
       },
@@ -581,10 +589,10 @@ export const PASSIVES = {
     name: 'Ossuary Guard',
     provisional: true,
     level: 5,
-    desc: 'Take the field with 2 stacks of Bone Shield already up.',
+    desc: 'Take the field with 3 stacks of Bone Shield already up.',
     hooks: {
       onEnterField: ({ ctx, self }) => {
-        ctx.applyStatus(self, STATUS.BONE_SHIELD, 2, { source: self, label: 'Ossuary Guard' });
+        ctx.applyStatus(self, STATUS.BONE_SHIELD, 3, { source: self, label: 'Ossuary Guard' });
       },
     },
   },
@@ -625,7 +633,9 @@ export const PASSIVES = {
     hooks: {
       onBlocked: ({ ctx, self, attacker }) => {
         if (!attacker || attacker.fainted) return;
-        ctx.applyStatus(attacker, STATUS.DAMP, 1, { source: self, label: 'Wear Down' });
+        // `washable` is what separates this grinding-down Damp from the
+        // permanent soaking a popped Bubble Shield leaves behind.
+        ctx.applyStatus(attacker, STATUS.DAMP, 1, { source: self, label: 'Wear Down', washable: true });
       },
     },
   },
@@ -633,9 +643,9 @@ export const PASSIVES = {
     id: 'impenetrable',
     name: 'Impenetrable',
     level: 5,
-    desc: 'Attacker-role units roll at 15 less Max ATK against you.',
+    desc: 'Attacker-role units roll at 10 less Max ATK against you.',
     hooks: {
-      foeAttackMod: ({ attacker }) => (attacker.species.role === ROLE.ATTACKER ? -15 : 0),
+      foeAttackMod: ({ attacker }) => (attacker.species.role === ROLE.ATTACKER ? -10 : 0),
     },
   },
 
@@ -665,6 +675,90 @@ export const PASSIVES = {
         const foe = ctx.activeFoeOf(self);
         if (foe && !foe.fainted) {
           ctx.applyStatus(foe, STATUS.REND, 1, { source: self, label: 'Death Throes' });
+        }
+      },
+    },
+  },
+
+  /* ══ FOURTH WAVE ═══════════════════════════════════════════════════
+   * Every card in this wave left its Level 5 passive as "xxx", so each of
+   * these pets has a single passive and gains nothing at Lv.5.
+   */
+
+  /* ── Decrephin ────────────────────────────────────────────────── */
+  dolphangs: {
+    id: 'dolphangs',
+    name: 'Dolphangs',
+    level: 1,
+    desc: 'While at 2 hearts or fewer, every successful attack inflicts Bleed.',
+    hooks: {
+      onAttackHit: ({ ctx, self, target }) => {
+        if (self.hp > 2) return;
+        ctx.applyStatus(target, STATUS.BLEED, 1, { source: self, label: 'Dolphangs' });
+      },
+    },
+  },
+
+  /* ── Slicer ───────────────────────────────────────────────────── */
+  wristblades: {
+    id: 'wristblades',
+    name: 'Wristblades',
+    level: 1,
+    desc: 'Successful attacks have a 25% chance to inflict 1 stack of Sliced.',
+    hooks: {
+      onAttackHit: ({ ctx, self, target }) => {
+        if (ctx.rng.die(4) === 1) {
+          ctx.applyStatus(target, STATUS.SLICED, 1, { source: self, label: 'Wristblades' });
+        }
+      },
+    },
+  },
+
+  /* ── Electrephant ─────────────────────────────────────────────── */
+  first_impression: {
+    id: 'first_impression',
+    name: 'First Impression',
+    provisional: true,
+    level: 1,
+    desc: 'The first time you land a hit on any given enemy it takes 2 extra Stun Counters — three in total with the Stunner role\'s own.',
+    hooks: {
+      /** `self.memo` is scratch space the engine hands every pet precisely so a
+       *  passive can remember something without the engine knowing what. */
+      onAttackHit: ({ ctx, self, target }) => {
+        const seen = self.memo.firstImpression ?? (self.memo.firstImpression = new Set());
+        if (seen.has(target.instanceId)) return;
+        seen.add(target.instanceId);
+        ctx.applyStatus(target, STATUS.STUN_COUNTER, 2, { source: self, label: 'First Impression' });
+      },
+    },
+  },
+
+  /* ── Swamp Fennec ─────────────────────────────────────────────── */
+  toxic_terrain: {
+    id: 'toxic_terrain',
+    name: 'Toxic Terrain',
+    level: 1,
+    legendary: true,
+    desc: 'Legendary — when you take the field the arena turns toxic for the rest of the match: at the end of any pet\'s turn it has a 25% chance to gain 1 stack of Poison.',
+    hooks: {
+      onEnterField: ({ ctx }) => {
+        ctx.establishField(FIELD.TOXIC_TERRAIN, 'Toxic Terrain');
+      },
+    },
+  },
+  venom_blood: {
+    id: 'venom_blood',
+    name: 'Venom Blood',
+    provisional: true,
+    level: 1,
+    desc: 'Immune to Poison. When damaged, a 25% chance to Poison the opposing pet.',
+    statusImmune: [STATUS.POISON],
+    hooks: {
+      onDamaged: ({ ctx, self }) => {
+        const foe = ctx.activeFoeOf(self);
+        if (!foe || foe.fainted) return;
+        if (ctx.rng.die(4) === 1) {
+          ctx.applyStatus(foe, STATUS.POISON, 1, { source: self, label: 'Venom Blood' });
         }
       },
     },

@@ -8,18 +8,15 @@ import RacingSetup from './views/RacingSetup';
 import ActiveRace from './views/ActiveRace';
 import { useMetaProgress } from './hooks/useMetaProgress';
 
-import { PetSetup, BattleArena } from './Pets';
+import { PetBattler } from './Pets';
 
 function App() {
   const [appMode, setAppMode] = useState('gateway'); // gateway | adventure | racing | petbattler
   const [currentView, setCurrentView] = useState('menu'); // menu | setup | run | stats | race | battle
   const [runConfig, setRunConfig] = useState(null);
   
-  const [racingConfig, setRacingConfig] = useState(null); 
-  
-  // NEW STATE: Hold the drafted teams from PetSetup
-  const [battleConfig, setBattleConfig] = useState(null); 
-  
+  const [racingConfig, setRacingConfig] = useState(null);
+
   const metaApi = useMetaProgress();
 
   if (appMode === 'gateway') {
@@ -100,24 +97,12 @@ function App() {
   // ---------------------------------------------------------------------------
   // NEW PET BATTLER ROUTING LOOP
   // ---------------------------------------------------------------------------
+  // The Pet Battler routes itself: a gauntlet is several matches with a draft
+  // in between, and that state has to outlive a trip into the arena.
   if (appMode === 'petbattler') {
     return (
       <div className="min-h-screen bg-stone-950 font-sans text-stone-100">
-        {currentView === 'setup' && (
-          <PetSetup 
-            onBack={() => setAppMode('gateway')} 
-            onBeginBattle={(config) => {
-              setBattleConfig(config);
-              setCurrentView('battle');
-            }}
-          />
-        )}
-        {currentView === 'battle' && (
-          <BattleArena
-            battleConfig={battleConfig}
-            onExit={() => setCurrentView('setup')}
-          />
-        )}
+        <PetBattler onBack={() => setAppMode('gateway')} />
       </div>
     );
   }

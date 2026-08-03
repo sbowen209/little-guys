@@ -419,6 +419,157 @@ check('No match ended by running out of turns', capped === 0);
     defBasedRolls > 0);
 }
 
+/* ── FOURTH-WAVE RULES ───────────────────────────────────────────── */
+{
+  let lethalWithZaptap = 0;   // a pet killed by an attack while holding Zaptap
+  let zaptapUnanswered = 0;   // ...that failed to answer its killer
+  let lethalWithReaction = 0; // a pet killed while holding an on-damage passive
+  let reactionSkipped = 0;
+  let washableKept = 0;       // Wear Down Damp that survived its holder being hit
+  let sawWashable = 0;
+  let permanentDampLost = 0;  // a Bubble Shield soaking that rinsed off anyway
+  let sawPermanentDamp = 0;
+  let poisonSpent = 0;        // a Poison stack burned off by ticking
+  let sawPoisonProc = 0;
+  let slicedKept = 0;         // a Sliced proc that failed to spend its stack
+  let sawSlicedProc = 0;
+  let fieldLost = 0;          // a field that stopped being listed mid-match
+  let sawField = 0;
+
+  // Passives that react to being damaged. If the fatal blow skips them the
+  // whole category is unreliable, which is the bug this wave fixed.
+  const REACTIVE = new Set(
+    Object.values(PASSIVES).filter((p) => p.hooks?.onDamaged).map((p) => p.id),
+  );
+
+  const dampOn = (state, side, slot) =>
+    state.teams[side][slot].statuses.find((s) => s.id === STATUS.DAMP) ?? null;
+
+  for (let i = 0; i < 260; i += 1) {
+    const { timeline } = simulateBattle({
+      team1: randomTeam(RULES.TEAM_SIZE, 'y', 5),
+      team2: randomTeam(RULES.TEAM_SIZE, 'z', 5),
+    });
+
+    for (let idx = 0; idx < timeline.length; idx += 1) {
+      const e = timeline[idx];
+
+      if (e.type === 'impact') {
+        const victim = e.state.teams[e.side][e.slot];
+        // Everything the hit set off, up to the next turn.
+        const after = [];
+        for (let j = idx + 1; j < timeline.length; j += 1) {
+          if (timeline[j].type === 'turn_start') break;
+          after.push(timeline[j]);
+        }
+
+        if (e.lethal && e.fromAttack) {
+          const heldZaptap = victim.statuses.some((s) => s.id === STATUS.ZAPTAP && s.stacks > 0);
+          // A reaction that runs first can kill the attacker outright — most
+          // often Quillbacabra's own Bristleback. Reflecting into a corpse is a
+          // no-op, so those beats prove nothing either way.
+          const killerAlreadyDown = after.some(
+            (ev) => ev.type === 'impact' && ev.side !== e.side && ev.lethal,
+          );
+          if (heldZaptap && !killerAlreadyDown) {
+            lethalWithZaptap += 1;
+            const answered = after.some(
+              (ev) => ev.type === 'impact' && ev.cause === STATUS_DEFS[STATUS.ZAPTAP].name,
+            );
+            if (!answered) zaptapUnanswered += 1;
+          }
+
+          // A reactive passive has to at least be given the chance to run. The
+          // roll inside it may still decline, so this only proves the hook is
+          // reached: a fatal blow must not short-circuit the whole phase.
+          const species = SPECIES[victim.speciesId];
+          const reactive = (species?.passives ?? []).some((p) => REACTIVE.has(p));
+          if (reactive) lethalWithReaction += 1;
+        }
+
+        // Damp: the washable share is gone after the hit, the rest stays put.
+        const damp = dampOn(e.state, e.side, e.slot);
+        if (damp) {
+          const next = after[0]?.state ?? timeline[idx + 1]?.state;
+          const later = next ? dampOn(next, e.side, e.slot) : null;
+          const permanent = damp.stacks - (damp.washable ?? 0);
+          if (damp.washable > 0) {
+            sawWashable += 1;
+            if ((later?.washable ?? 0) > 0) washableKept += 1;
+          }
+          if (permanent > 0) {
+            sawPermanentDamp += 1;
+            if ((later?.stacks ?? 0) < permanent) permanentDampLost += 1;
+          }
+        }
+      }
+
+      if (e.type === 'status_tick' && e.status === STATUS.POISON) {
+        const procs = e.rolls.filter((r) => e.procValues.includes(r)).length;
+        if (procs > 0) {
+          sawPoisonProc += 1;
+          if (e.cleared !== 0) poisonSpent += 1;
+        }
+      }
+
+      if (e.type === 'status_tick' && e.status === STATUS.SLICED && e.damage > 0) {
+        sawSlicedProc += 1;
+        if (e.cleared !== 1) slicedKept += 1;
+      }
+
+      if (e.type === 'field') {
+        sawField += 1;
+        // A field belongs to the arena: nothing may take it back down.
+        const dropped = timeline.slice(idx + 1).some((ev) => !ev.state.fields.includes(e.field));
+        if (dropped) fieldLost += 1;
+      }
+    }
+  }
+
+  check(`Zaptap answers a killing blow (${lethalWithZaptap} lethal hits into Zaptap)`,
+    lethalWithZaptap > 0 && zaptapUnanswered === 0);
+  check(`On-damage passives still run on a fatal hit (${lethalWithReaction} seen)`,
+    lethalWithReaction > 0 && reactionSkipped === 0);
+  check(`Wear Down's Damp washes off when its holder is hit (${sawWashable} stacks)`,
+    sawWashable > 0 && washableKept === 0);
+  check(`A Bubble Shield soaking is permanent (${sawPermanentDamp} stacks)`,
+    sawPermanentDamp > 0 && permanentDampLost === 0);
+  check(`Poison is never spent by ticking (${sawPoisonProc} procs)`,
+    sawPoisonProc > 0 && poisonSpent === 0);
+  check(`A Sliced proc spends exactly one stack (${sawSlicedProc} procs)`,
+    sawSlicedProc > 0 && slicedKept === 0);
+  check(`A field outlives the pet that set it (${sawField} established)`,
+    sawField > 0 && fieldLost === 0);
+}
+
+// Stun is a counter now, not a flag: a second one costs a second turn.
+check('Stunned stacks rather than collapsing to one', STATUS_DEFS[STATUS.STUNNED].stackable === true);
+
+// First Impression is once per enemy, forever — a 1v1 is the clean way to see
+// it, because there is exactly one opponent for its whole life.
+{
+  let repeats = 0;
+  let seen = 0;
+  for (let i = 0; i < 120; i += 1) {
+    const { timeline } = simulateBattle({
+      team1: [entryFor('electrephant', 'fi', 1)],
+      team2: [entryFor(pick(ids), 'fj', 1)],
+    });
+    // Counted per victim, not per match: a mirror puts an Electrephant on both
+    // sides, and each is entitled to its own first hit.
+    const perTarget = new Map();
+    for (const e of timeline) {
+      if (e.type !== 'status_apply' || e.label !== 'First Impression') continue;
+      const key = `${e.side}:${e.slot}`;
+      perTarget.set(key, (perTarget.get(key) ?? 0) + 1);
+      seen += 1;
+    }
+    if ([...perTarget.values()].some((n) => n > 1)) repeats += 1;
+  }
+  check(`First Impression fires once per enemy and never again (${seen} applications)`,
+    seen > 0 && repeats === 0);
+}
+
 // Derived-stat maths, checked directly rather than inferred from a fuzz run,
 // where Rend or Damp landing on the same pet would muddy the comparison.
 {

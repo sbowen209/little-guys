@@ -80,7 +80,7 @@ export const SPECIES = {
     family: 'scruffy',
     role: ROLE.TANK,
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
-    base: { hp: 7, atk: 25, def: 50, spc: 25 },
+    base: { hp: 7, atk: 25, def: 50, spc: 20 },
     special: 'shed',
     passives: ['thick_fur', 'scruffy_resolve'],
     art: '/images/pets/Scruffy.webp',
@@ -136,7 +136,7 @@ export const SPECIES = {
     family: 'felightning',
     role: ROLE.SUPPORT,
     typing: { offensive: ELEMENT.AIR, defensive: ELEMENT.AIR },
-    base: { hp: 3, atk: 25, def: 30, spc: 40 },
+    base: { hp: 4, atk: 25, def: 30, spc: 40 },
     special: 'static_shock',
     passives: ['get_away', 'parting_charge'],
     art: '/images/pets/Felightning.webp',
@@ -152,7 +152,7 @@ export const SPECIES = {
     bond: 'bubble',
     role: ROLE.TANK,
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.WATER },
-    base: { hp: 8, atk: 20, def: 50, spc: 30 },
+    base: { hp: 7, atk: 20, def: 50, spc: 30 },
     special: 'bubble_shield',
     passives: ['lovey_dovey', 'surface_tension'],
     art: '/images/pets/BubbleTrouble_Physical.webp',
@@ -168,7 +168,7 @@ export const SPECIES = {
     bond: 'bubble',
     role: ROLE.AFF_TANK,
     typing: { offensive: ELEMENT.WATER, defensive: ELEMENT.WATER },
-    base: { hp: 8, atk: 20, def: 50, spc: 30 },
+    base: { hp: 7, atk: 20, def: 50, spc: 30 },
     special: 'bubble_shield',
     passives: ['lovey_dovey', 'surface_tension'],
     art: '/images/pets/BubbleTrouble_Affinity.webp',
@@ -271,7 +271,7 @@ export const SPECIES = {
     family: 'mosstiff',
     role: ROLE.HEALER,
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
-    base: { hp: 5, atk: 30, def: 35, spc: 25 },
+    base: { hp: 6, atk: 30, def: 35, spc: 25 },
     special: 'verdant_bloom',
     passives: ['photosynthesis', 'last_bloom'],
     art: '/images/pets/Mosstiff.webp',
@@ -284,7 +284,7 @@ export const SPECIES = {
     family: 'bellybummer',
     role: ROLE.SUPPORT,
     typing: { offensive: ELEMENT.SHADOW, defensive: ELEMENT.SHADOW },
-    base: { hp: 4, atk: 30, def: 30, spc: 40 },
+    base: { hp: 4, atk: 40, def: 30, spc: 40 },
     special: 'lifesteal',
     passives: ['spooked', 'stage_fright'],
     art: '/images/pets/Bellybummer.webp',
@@ -360,10 +360,74 @@ export const SPECIES = {
     family: 'dragonturtle',
     role: ROLE.TANK,
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.WATER },
-    base: { hp: 8, atk: 20, def: 50, spc: 20 },
+    base: { hp: 7, atk: 20, def: 40, spc: 20 },
     special: 'shell_slam',
     passives: ['wear_down', 'impenetrable'],
     art: '/images/pets/DragonTurtle.webp',
+    facing: 'Left',
+  },
+
+  /* ══ FOURTH WAVE ═══════════════════════════════════════════════════
+   * The four species behind the newest stable pets (Fish Sticks, Celery,
+   * Peanut and Syrup). Every card left its Level 5 passive written as "xxx",
+   * so these four ship with a single passive and gain nothing at Lv.5 — that
+   * slot is waiting on a design, not lost. They brought two new statuses
+   * (Poison, Sliced) and the game's first field effect (Toxic Terrain).
+   */
+
+  decrephin: {
+    id: 'decrephin',
+    name: 'Decrephin',
+    family: 'decrephin',
+    role: ROLE.STUNNER,
+    // Stunners ignore the affinity chart, so the offensive typing is inert.
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.WATER },
+    base: { hp: 4, atk: 50, def: 25, spc: 30 },
+    special: 'sonic_boom',
+    passives: ['dolphangs'],
+    art: '/images/pets/Decrephin.webp',
+    facing: 'Left',
+  },
+
+  slicer: {
+    id: 'slicer',
+    name: 'Slicer',
+    family: 'slicer',
+    role: ROLE.ATTACKER,
+    typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.WATER },
+    base: { hp: 5, atk: 45, def: 30, spc: 30 },
+    special: 'sever',
+    passives: ['wristblades'],
+    art: '/images/pets/Slicer.webp',
+    facing: 'Right',
+  },
+
+  electrephant: {
+    id: 'electrephant',
+    name: 'Electrephant',
+    family: 'electrephant',
+    role: ROLE.STUNNER,
+    // Inert on the chart like every Stunner; AIR purely so the kit reads electric.
+    typing: { offensive: ELEMENT.AIR, defensive: ELEMENT.AIR },
+    base: { hp: 7, atk: 25, def: 45, spc: 25 },
+    special: 'static_charge',
+    passives: ['first_impression'],
+    art: '/images/pets/Electrephant.webp',
+    facing: 'Left',
+  },
+
+  swamp_fennec: {
+    id: 'swamp_fennec',
+    name: 'Swamp Fennec',
+    family: 'fennec',
+    role: ROLE.SUPPORT,
+    typing: { offensive: ELEMENT.EARTH, defensive: ELEMENT.EARTH },
+    base: { hp: 4, atk: 20, def: 30, spc: 50 },
+    special: 'toxic_spray',
+    /** The roster's first Legendary passive, which is simply one that is always
+     *  online and marked as such for the builder — no engine concept of its own. */
+    passives: ['toxic_terrain', 'venom_blood'],
+    art: '/images/pets/SwampFennec.webp',
     facing: 'Left',
   },
 };

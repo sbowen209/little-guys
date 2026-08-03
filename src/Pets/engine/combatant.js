@@ -40,9 +40,13 @@ export const createCombatant = (entry, side, slot) => {
     hasEntered: false,
     /** Turns this pet has begun while on the field — 1 during its very first one. */
     turnsInPlay: 0,
+    /** Scratch space passives use to remember things. The engine never reads it. */
+    memo: Object.create(null),
     passives,
     ability: abilityDef(species.special),
     debuffImmune: passives.some((p) => p.debuffImmune),
+    /** Specific statuses this pet refuses, whatever their kind (Venom Blood). */
+    statusImmune: new Set(passives.flatMap((p) => p.statusImmune ?? [])),
   };
 };
 
@@ -72,7 +76,15 @@ export const removeStacks = (pet, id, count = 1) => {
 
 export const clearStatus = (pet, id) => { delete pet.statuses[id]; };
 
-export const blocksStatus = (pet, id) => pet.debuffImmune && isDebuff(id);
+export const blocksStatus = (pet, id) =>
+  (pet.debuffImmune && isDebuff(id)) || pet.statusImmune?.has(id) === true;
+
+/** The passive that refuses `id`, for the IMMUNE readout. */
+export const immunityLabel = (pet, id) => {
+  const specific = pet.passives.find((p) => p.statusImmune?.includes(id));
+  if (specific) return specific.name;
+  return pet.passives.find((p) => p.debuffImmune)?.name ?? 'Immune';
+};
 
 /* ── DECLARATIVE STATUS BEHAVIOUR ────────────────────────────────── */
 
@@ -159,7 +171,14 @@ export const attackDie = (pet, { scale = 1, targetFade = false, fromDef = false,
 /* ── SNAPSHOTS ───────────────────────────────────────────────────── */
 
 const snapshotStatuses = (pet) =>
-  Object.entries(pet.statuses).map(([id, entry]) => ({ id, stacks: entry.stacks }));
+  Object.entries(pet.statuses).map(([id, entry]) => (
+    // `washable` only exists on Damp, and only for the share of the stack that
+    // Wear Down ground on. Surfaced so the harness can prove the two flavours
+    // behave differently.
+    entry.washable === undefined
+      ? { id, stacks: entry.stacks }
+      : { id, stacks: entry.stacks, washable: entry.washable }
+  ));
 
 /** A frozen, plain-object view of a pet for the UI. Cheap enough to store per event. */
 export const snapshotPet = (pet) => ({

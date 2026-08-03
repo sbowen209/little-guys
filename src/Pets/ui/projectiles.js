@@ -201,6 +201,34 @@ export const PROJECTILES = {
     spread: 40,
     desc: 'Three red-and-white quills thrown in a spinning fan.',
   },
+
+  /* Water — Decrephin. A compressed ring of sound, not a splash. */
+  sonic_ring: {
+    id: 'sonic_ring',
+    element: ELEMENT.WATER,
+    core: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(186,230,253,0.35) 40%, rgba(56,189,248,0.6) 62%, rgba(56,189,248,0) 78%)',
+    glow: '#7dd3fc',
+    size: [104, 104],
+    motion: 'straight',
+    trail: 'rgba(125, 211, 252, 0.35)',
+    count: 2,
+    spread: 48,
+    desc: 'A hollow shockwave ring — the shark screams rather than bites.',
+  },
+
+  /* Earth — Swamp Fennec. A lobbed spore bomb that hangs in the air. */
+  spore: {
+    id: 'spore',
+    element: ELEMENT.EARTH,
+    core: 'radial-gradient(circle, #ecfccb 0%, #a3e635 30%, #4d7c0f 62%, rgba(77,124,15,0) 82%)',
+    glow: '#84cc16',
+    size: [80, 80],
+    motion: 'arc',
+    trail: 'rgba(132, 204, 22, 0.45)',
+    count: 2,
+    spread: 30,
+    desc: 'A pair of drifting toxin pods, lobbed rather than thrown.',
+  },
 };
 
 /* ── ROUTING ──────────────────────────────────────────────────────── */
@@ -221,6 +249,10 @@ const SPECIES_PROJECTILE = {
   bellybummer: 'wisp',
   mega_chicken: 'feather',
   dragon_turtle: 'spout',
+  // Fourth wave. Electrephant joins the electric family; Slicer stays melee
+  // (its whole kit is the blades) and so is deliberately absent.
+  electrephant: 'spark',
+  swamp_fennec: 'spore',
 };
 
 /**
@@ -235,6 +267,9 @@ const ABILITY_PROJECTILE = {
   chain_shock: 'spark',
   thunderstorm: 'spark',
   doom_curse: 'hex',
+  sonic_boom: 'sonic_ring',
+  static_charge: 'spark',
+  toxic_spray: 'spore',
 };
 
 /** The default projectile an element throws when nothing more specific applies. */

@@ -1,6 +1,6 @@
 # PET BATTLER
 
-**Game Design Document v3.2 — Deterministic Autobattler**
+**Game Design Document v3.3 — Deterministic Autobattler**
 
 This document describes the game *as implemented* in `src/Pets/`. Where v2.0 of
 the design differed from what shipped, this version follows the code and calls
@@ -13,7 +13,7 @@ out the difference. Section 14 is the contract for adding pets in later versions
 | | |
 |---|---|
 | **Genre** | 1v1 turn-based dice autobattler |
-| **Player agency** | Entirely pre-combat: roster selection, Nature rolls, level-ups, and lineup order |
+| **Player agency** | Entirely pre-combat: roster selection, Nature rolls, level-ups, lineup order, and — in the Gauntlet — how the stable is divided into squads |
 | **Combat** | Fully automated. No buttons during a match — only playback controls |
 | **Team size** | Up to 5 pets, deployed in a locked order |
 | **Health** | A small flat pool shown as hearts (base 3–8 depending on species) |
@@ -156,9 +156,9 @@ fails loudly if the behaviour disappears again. **Do not remove that assertion.*
 | **Cursed** | Debuff | When you would deal damage, a flat **50% chance to null it entirely** — the number of stacks does not change the odds. Stacks are **duration**: one is lost at the end of your own turn, except a stack applied during that same turn, which is spared so a reactive application always gets a live turn |
 | **Paralyzed** | Debuff | 25% chance each turn to lose your action, checked after charge is generated. Does not expire |
 | **Stun Counter** | Debuff | At 3 counters, they convert into Stunned |
-| **Stunned** | Debuff | Skip your next turn. Consumed on use |
 | **Bubble Shield** | Buff | Max DEF doubled. Pops the moment you take *any* damage, leaving the attacker Damp |
-| **Damp** | Debuff | Max DEF reduced by 5 per stack. Washed off when you take damage |
+| **Damp** | Debuff | Max DEF reduced by 5 per stack. **Two flavours:** a soaking from a popped Bubble Shield is *permanent*; the stacks Wear Down grinds onto an attacker are *washable* and rinse off the next time that attacker takes damage. The applier chooses via `washable`, and the engine tracks the washable share of the stack count separately |
+| **Stunned** | Debuff | Skip your next turn entirely, Special charge included. **Stacks** — a second Stun costs a second turn rather than being swallowed. One stack is spent per turn lost |
 | **Shed** | Buff | Max ATK increased by your Max DEF. One stack consumed per attack |
 | **Zaptap** | Buff | When an attack damages you, deal 1 back to the attacker. One stack consumed |
 | **Advantage** | Buff | Your next attack rolls with Advantage. One stack consumed per attack |
@@ -168,6 +168,8 @@ fails loudly if the behaviour disappears again. **Do not remove that assertion.*
 | **Powerful** | Buff | Your attacks deal at least 2 damage. One stack consumed per attack that **lands** |
 | **Bleed** | Debuff | At the start of your turn, roll `1d4` per stack. Each `1` deals 1 damage and clears that stack |
 | **Bone Shield** | Buff | +5 Max DEF per stack. One stack is stripped whenever an attack damages you |
+| **Poison** | Debuff | At the start of your turn, roll `1d6` per stack. Each `1` deals 1 damage. **The stack is not spent** — poison never wears off |
+| **Sliced** | Debuff | When an attack damages you, a flat 50% chance to spend a stack and take 1 more damage. Rolled once per incoming attack, and folded into that hit rather than landing as a second one |
 | **Stagnation** | System | See §8 |
 
 A stack of **Advantage** is one attack's worth, not one step of magnitude:
@@ -245,21 +247,25 @@ Names marked *(provisional)* are placeholders awaiting a real one; they carry
 | Necrodoodle | **Doom Curse** | Attack, 200% ATK | 2 damage and 3 stacks of Cursed |
 | Gnollbacabra | **Sunder** | Effect | Permanently strips `1d3 × 10` Max ATK. If the target's Max ATK reaches 0 they are destroyed outright |
 | Famine Wolf | **Ravenous Bite** | Attack, 200% ATK | 2 damage, then immediately regain 50 charge |
-| Felightning | **Static Shock** | Attack, **300% ATK** | 2 damage and inflicts Paralyzed |
+| Felightning | **Static Shock** | Attack, **400% ATK** | 2 damage and inflicts Paralyzed |
 | Bubble Trouble (both) | **Bubble Shield** | Effect | Doubles Max DEF until you take damage; the attacker who pops it is left Damp |
 | Cerberus | **Twin Fangs** *(provisional)* | Attack, 200% ATK | 2 damage and 3 stacks of Advantage |
 | Milk Truck | **Milk** | Effect | Washes off every debuff and grants +10 Max ATK permanently |
 | Balto | **Sled Charge** *(provisional)* | Attack, 200% ATK | 1 damage, then a benched enemy is dragged onto the field and takes 1 damage too |
 | Watthog | **Chain Shock** | Attack, 200% ATK | 1 damage, plus 1 to two different benched enemies |
-| Quillbacabra | **Quill Guard** *(provisional)* | Effect | 3 stacks of Zaptap |
+| Quillbacabra | **Quill Guard** *(provisional)* | Effect | 2 stacks of Zaptap |
 | Punchadillo | **Haymaker** *(provisional)* | Attack, 200% ATK | 1 damage and 1 Stun Counter on **every** enemy, bench included — the active one also takes the Stunner role's counter, so it gets 2 |
 | Mosstiff | **Verdant Bloom** *(provisional)* | Effect | A random benched ally gains 1 heart, which **can exceed its Max HP** |
-| Bellybummer | **Lifesteal** | Attack, 200% ATK | 1 damage healed back to you, then roll SPC and siphon that much charge off the target |
+| Bellybummer | **Lifesteal** | Attack, **300% ATK** | 1 damage healed back to you, then roll SPC and siphon that much charge off the target |
 | Mega Chicken | **Talon Flurry** *(provisional)* | Attack, 200% ATK | 2 damage and 2 stacks of Bleed |
-| Thunder Lion | **Thunderstorm** | Attack, 200% ATK | 1 damage. Gains 1 Zaptap **whether or not the strike lands** |
+| Thunder Lion | **Thunderstorm** | Effect | 2 Stun Counters on the opposing pet, and 1 stack of Zaptap for you |
 | Bone Boar | **Bone Gore** | Attack, 200% ATK | 2 damage, or 3 against a Tank or Affinity Tank |
 | Wild Cat | **Rip and Tear** *(provisional)* | Attack, 200% ATK | 1 damage, Rend, and 1 stack of Bleed |
 | Dragon Turtle | **Shell Slam** *(provisional)* | Attack, **200% of Max DEF** | 1 damage and inflicts Burn |
+| Decrephin | **Sonic Boom** | Effect | Stuns a random benched enemy outright; with the bench empty it hits the active one |
+| Slicer | **Sever** *(provisional)* | Attack, 200% ATK | 2 damage — and if it finishes the target, the next enemy in arrives with 2 stacks of Sliced |
+| Electrephant | **Static Charge** *(provisional)* | Effect | 1 stack of Zaptap and +5 Max ATK permanently |
+| Swamp Fennec | **Toxic Spray** *(provisional)* | Effect | 1 Poison on a random benched enemy; with the bench empty it lands on the active one |
 
 **Shell Slam is the only Special that rolls off a stat other than ATK.** The
 `atkFromDef` field swaps the basis to Max DEF, which is what lets a `d20`
@@ -301,29 +307,33 @@ Every pet has a passive at Level 1 and a second at Level 5.
 
 | Pet | Lv.1 | Lv.5 |
 |---|---|---|
-| Hellhound (Affinity) | **Hellfire** — standard attacks have a 1/6 chance to inflict Burn | **Hell Flames** — Burns this pet applies deal 1 extra damage |
+| Hellhound (Affinity) | **Hellfire** — successful attacks have a 1/6 chance to inflict Burn | **Hell Flames** — Burns this pet applies deal 1 extra damage |
 | Hellhound (Physical) | **Intimidating** — advantage **and +1 damage** against enemies at full health | **Relentless** — advantage against enemies at 2 hearts or fewer |
 | Emboar | **Flame Aura** — 25% chance to Burn anyone who damages you with an attack | **Afterburn** — Burn the opposing pet when you are knocked out |
-| Terror Terrier | **Ghostly Blur** — gain 1 Fade after taking damage | **Capitalize** — when you Stun someone they take 1 damage and lose all charge |
+| Terror Terrier | **Ghostly Blur** — gain 1 Fade after taking damage | **Capitalize** — when you Stun someone they take 1 damage and lose 50 charge |
 | Scruffy | **Thick Fur** — immune to debuffs | **Scruffy** — advantage on DEF at 2 hearts or fewer |
-| Necrodoodle | **Hex Claws** — standard attacks have a 25% chance to inflict Cursed | **Vengeful Curse** — 25% chance to Curse anyone who damages you |
+| Necrodoodle | **Hex Claws** — successful attacks have a 25% chance to inflict Cursed | **Vengeful Curse** — 25% chance to Curse anyone who damages you |
 | Gnollbacabra | **Crippling Bite** — after damaging a target, their next attack rolls at −`1d6 × 10` Max ATK | **Bonecrusher** — anyone who damages you loses `1d2 × 10` Max DEF until their next turn |
 | Famine Wolf | **Crunch** — 25% chance to deal 1 extra damage | **Famine Feast** — after a knockout, gain +40 Max ATK permanently |
 | Felightning | **Get Away** — when knocked out, Paralyze a random benched enemy | **Parting Charge** *(prov.)* — when knocked out, bank 50 charge, which passes to your replacement |
 | Bubble Trouble (both) | **Lovey Dovey** — gain 50% of any charge a bonded ally generates | **Surface Tension** — recover 25 charge when your Bubble Shield pops |
 | Cerberus | **Twin Bite** — after an attack is blocked, gain 1 Advantage | **Press the Advantage** *(prov.)* — attacking with net Advantage, 50% chance of +1 damage |
-| Milk Truck | **Milk Shake** — gain 1 Energized when damaged | **Second Stomach** *(prov.)* — 1-in-10 chance to recover 1 heart at the start of your turn |
+| Milk Truck | **Milk Shake** — gain 1 Energized when damaged | **Second Stomach** *(prov.)* — 1-in-6 chance to recover 1 heart at the start of your turn |
 | Balto | **First Light** *(prov.)* — **double Max ATK** and advantage on any roll during either pet's first turn on the field | **Fresh Legs** *(prov.)* — gain 1 Powerful when you start the match or enter from the bench |
 | Watthog | **Chain Lightning** — dealing damage has a 1/6 chance to arc 1 damage to a benched enemy | **Supercharge** — gain 15 charge whenever you are damaged |
 | Quillbacabra | **Bristleback** *(prov.)* — 25% chance to deal 1 back when damaged | **Parting Quills** *(prov.)* — when knocked out, the killer takes 1 damage plus 1 per Zaptap stack you held |
 | Punchadillo | **Concussive Blast** *(prov.)* — landing a third Stun Counter on the active enemy gives every benched enemy 1 Stun Counter | **Rolling Guard** *(prov.)* — landing a third Stun Counter grants 2 Fade |
 | Mosstiff | **Photosynthesis** *(prov.)* — 25% chance to gain a Heart Counter at the start of your turn, without attacking | **Last Bloom** *(prov.)* — when knocked out, the next ally to enter gains 1 heart, which can exceed its Max HP |
-| Bellybummer | **Spooked** — when you take the field, the opposing pet gains 5 Disadvantage | **Stage Fright** *(prov.)* — when you take the field, the opposing pet gains 5 Stunt |
+| Bellybummer | **Spooked** — when you take the field, the opposing pet gains 5 Disadvantage | **Stage Fright** *(prov.)* — when you take the field, the opposing pet gains **99** Stunt, locking its Special for the match |
 | Mega Chicken | **Raking Spurs** *(prov.)* — successful attacks have a 50% chance to inflict Bleed | **Death Throes** *(prov.)* — when knocked out, the opposing pet gains 1 Rend |
-| Thunder Lion | **Electrofang** — successful attacks have a 1/6 chance to Paralyze | **Electrocyclone** — 25% chance to gain 1 Zaptap when damaged |
-| Bone Boar | **Bone Harvest** *(prov.)* — gain 1 Bone Shield when you deal damage | **Ossuary Guard** *(prov.)* — take the field with 2 Bone Shield already up |
+| Thunder Lion | **Electrofang** — successful attacks have a 1/6 chance to Paralyze | **Electrocyclone** — 1/6 chance to gain 1 Zaptap when damaged |
+| Bone Boar | **Bone Harvest** *(prov.)* — gain 1 Bone Shield when you deal damage | **Ossuary Guard** *(prov.)* — take the field with 3 Bone Shield already up |
 | Wild Cat | **Ambush Instinct** *(prov.)* — advantage against enemies whose Special meter is at least half full | **Scent of Blood** *(prov.)* — +5 Max ATK per pet already defeated on the enemy team |
-| Dragon Turtle | **Wear Down** — an attack that fails against you leaves the attacker Damp | **Impenetrable** — Attacker-role units roll at 15 less Max ATK against you |
+| Dragon Turtle | **Wear Down** — an attack that fails against you leaves the attacker *washable* Damp | **Impenetrable** — Attacker-role units roll at 10 less Max ATK against you |
+| Decrephin | **Dolphangs** — at 2 hearts or fewer, every successful attack inflicts Bleed | *(unwritten)* |
+| Slicer | **Wristblades** — successful attacks have a 25% chance to inflict 1 Sliced | *(unwritten)* |
+| Electrephant | **First Impression** *(prov.)* — the first hit on any given enemy adds 2 extra Stun Counters, three with the role's own | *(unwritten)* |
+| Swamp Fennec | **Toxic Terrain** *(Legendary)* — on entry the arena turns toxic for the rest of the match | **Venom Blood** *(prov.)* — immune to Poison; 25% to Poison the foe when damaged |
 
 **Bonding** is a species tag rather than a hard-coded pairing: both Bubble
 Troubles carry `bond: 'bubble'`, and *Lovey Dovey* fires for any ally sharing
@@ -371,6 +381,18 @@ change to that species' Special or passives is inherited automatically.
 | **Fuzzy** | Hellhound (Physical) | 5 | +11 / +8 / −3 | HP 5 · d69 / d42 / d29 |
 | **Lovey** | Bubble Trouble (Physical) | 2 | +1 / +1 / +3 | HP 8 · d22 / d51 / d33 |
 | **Dovey** | Bubble Trouble (Affinity) | 2 | −3 / −7 / −8 | HP 8 · d20 / d43 / d22 |
+| **Fish Sticks** | Decrephin | 2 | −4 / −6 / −2 | HP 4 · d46 / d22 / d28 |
+| **Celery** | Slicer | 3 | +16 / −4 / −4 | HP 5 · d64 / d28 / d26 |
+| **Peanut** | Electrephant | 2 | −4 / −3 / +3 | HP 7 · d23 / d42 / d28 |
+| **Syrup** | Swamp Fennec | 1 | 0 / 0 / 0 | HP 4 · d20 / d30 / d50 |
+
+Collectively these eight are the **stable** — the pets the player owns, and the
+exact pool the Gauntlet divides into squads. `STABLE_IDS` is derived from the
+preset registry, so adding a preset adds it to the stable.
+
+> **Note:** Fuzzy's card gives DEF as `d40`, but its own annotations on the same
+> card read *30 base + 8 Nature + 4 Level* = 42, which is what ships. Flagged
+> rather than silently picked, because only one of the two can be right.
 
 ---
 
@@ -383,6 +405,79 @@ change to that species' Special or passives is inherited automatically.
   exists are dropped rather than crashing the builder, and the pre-refactor
   `dataId` field is still accepted. This is what makes it safe to rename or
   retire artwork in a later version.
+
+### ACE
+
+A toggle on the library card. A pet drafted as an **Ace** rolls every one of its
+three Natures positive. The magnitude still comes from the same `d20` ladder —
+the roll is folded into the 11–20 half rather than re-rolled — so an Ace's spread
+of outcomes is exactly the top half of a normal pet's, not a different curve.
+
+Ace does not apply to presets: their stat lines are authored, so there is nothing
+to roll. On a drafted pet the Ace button re-rolls the Natures immediately, which
+makes it a toggle you can flip either way rather than a one-shot at draft time.
+
+### A pet is stored as its parts
+
+`stats` used to be the only record of a pet, so a level-up was irreversible and a
+bad Nature meant deleting the pet and drafting a new one. An instance now keeps
+`natures`, an itemised `levelGains` list (the exact `1d4` each level granted) and
+a `manual` delta from Manual Balance. `deriveStats()` rebuilds the dice from
+those parts, which is what makes **level down** and **re-roll Natures** exact
+rather than approximate.
+
+Saves written before this have only a final stat line. Rather than guess which
+bumps came from levels and which from Manual Balance, migration books the whole
+surplus over the basis as `manual`: the dice come out identical, and every edit
+from then on is reversible.
+
+---
+
+## 11b. THE STABLE GAUNTLET
+
+A series against a generated rival kennel, and the only mode where the player's
+own stable is the roster.
+
+- Pick **1, 2 or 3** rival squads. The stable is divided into the same number,
+  **with no pet in two squads**. Pets may be left out entirely.
+- Each rival squad is generated to **match the player squad it faces** in size
+  and average level, and is levelled by rolling the same `1d4` per level the
+  builder rolls — so it is built by the player's rules, not handed a flat bonus.
+- **1 squad** — a single match settles it.
+- **2 squads** — two matches. A **1–1 split forces a decider**, for which each
+  side drafts a third squad from the pets across *its own two squads*. The pets
+  you spread thin over the first two rounds are exactly the ones you get to
+  concentrate for the last. The AI concentrates by raw power score.
+- **3 squads** — best of three; a 2–0 sweep ends it without a third match.
+- A drawn match counts for neither side and the series plays on.
+
+The rules are pure and live in `engine/gauntlet.js` as a small state machine:
+`nextStep(series)` returns `match`, `decider` or `done`, and the UI advances it
+by handing back results. Nothing about it touches the simulator.
+
+### Why the module routes itself
+
+A series is several matches with a draft in the middle, and `App.jsx` had nowhere
+to keep that across a trip into the arena. `Pets/PetBattler.jsx` now owns the
+module's routing — menu, builder, gauntlet, arena, history — and App renders that
+one component.
+
+---
+
+## 11c. MATCH HISTORY
+
+Finished duels and series are written to `localStorage` under
+`gpb_match_history`, newest first, capped at 40 entries.
+
+**Only what the ledger draws is stored** — names, art paths, levels and the
+outcome. A 5v5 timeline is ~560 events each carrying a full state snapshot, so
+keeping even a handful would blow the storage quota. The **seed is kept**, which
+is enough to reproduce any match exactly.
+
+A match is recorded when its playback *finishes*, not when it is simulated, so
+the ledger reflects what the player actually watched. In a series the result is
+parked until Continue is pressed — writing it the instant playback ended would
+advance the series and unmount the arena before the end card could be read.
 
 ---
 
@@ -485,9 +580,11 @@ already shows the miss, so the word was noise on top of two clearer signals.
 
 ```
 src/Pets/
+├── PetBattler.jsx   the module's own router: menu, gauntlet, arena, history
 ├── data/            Pure data. No logic, no React.
 │   ├── constants.js   roles, elements, affinity chart, matchup tables, RULES
 │   ├── statuses.js    status registry
+│   ├── fields.js      arena-wide condition registry
 │   ├── passives.js    passive registry — hooks live here
 │   ├── abilities.js   Special registry
 │   ├── species.js     the pet directory
@@ -498,9 +595,11 @@ src/Pets/
 │   ├── combatant.js   live pet state + the derived-stat pipeline
 │   ├── events.js      event vocabulary and the pacing table
 │   ├── simulate.js    the rules
+│   ├── gauntlet.js    the series state machine + opponent generation
 │   └── balance.mjs    headless fuzz + win-rate harness
 ├── hooks/
 │   ├── useBattlePlayback.js   rAF transport over a finished timeline
+│   ├── useMatchHistory.js     the battle ledger
 │   └── useSavedTeams.js       localStorage with migration
 ├── ui/              The arena
 └── setup/           Menu, team builder, battle select
@@ -575,9 +674,17 @@ a retired passive that only a preset still referenced cannot slip through.
 `onAllySpcGain`, `benchCharge`. The authoritative list, with signatures, is the
 comment block at the top of `data/passives.js`.
 
+Flags a passive can carry: `debuffImmune`, `statusImmune` (a specific list, for
+*Venom Blood*), and `legendary` (always online, and labelled as such in the
+builder). `self.memo` is per-combatant scratch space for a passive that has to
+remember something across turns — *First Impression* keeps the set of enemies it
+has already met there, so the engine never grows a field for one pet's
+bookkeeping.
+
 `ctx` additionally offers `activeFoeOf`, `alliesOf`, `foesOf`, `benchedFoesOf`,
 `benchedAlliesOf`, `addHeartCounters`, `clearDebuffs`, `forceSwitch`,
-`queueSwitchInBonus`, and `heal(pet, n, { overheal })`.
+`queueSwitchInBonus` (which now also carries a `status`), `establishField`, and
+`heal(pet, n, { overheal })`.
 
 Adding a pet should not require touching `engine/` or `ui/`. If it does, the
 right move is a new **general** hook rather than a special case — the engine
@@ -594,7 +701,7 @@ node src/Pets/engine/balance.mjs 2000 5      # level 5 — every second passive 
 ```
 
 Reports average and longest match length, draw rate, a solo win-rate table for
-every species, a **5v5 roster contribution table**, and **35 rule assertions**.
+every species, a **5v5 roster contribution table**, and **44 rule assertions**.
 Run it at both levels: several rules
 only exist once the Lv.5 passives are live, and a pet can be fine at one level
 and broken at the other.
@@ -612,12 +719,89 @@ run go green.**
 
 ---
 
-## 15. CHANGES IN v3.2
+## 15. CHANGES IN v3.3
+
+### Fourth wave
+
+Four more pets — **Decrephin**, **Slicer**, **Electrephant** and **Swamp
+Fennec** — for **28 species**, and four more stable presets (Fish Sticks,
+Celery, Peanut, Syrup) for **8**. They brought two statuses (Poison, Sliced),
+the game's first **field effect** and its first **Legendary** passive.
+
+Every one of their cards left the Level 5 passive written as `xxx`, so all four
+ship with a single passive and gain nothing at Lv.5. That slot is unwritten, not
+lost.
+
+### Field effects
+
+A condition that belongs to the arena rather than to a pet: established by a
+passive through `ctx.establishField(id)`, never cleansed, unaffected by the
+setter leaving or dying, and applying to both sides. `data/fields.js` is the
+registry and the engine walks it generically — as with statuses and passives, no
+engine file names a field. *Toxic Terrain* is the first.
+
+### The fatal-blow fix
+
+**Reactions to being damaged now fire even when the blow was fatal.** Previously
+`dealDamage` ran the whole on-damage phase in an `else` branch, so a killing hit
+skipped it entirely: Zaptap did not answer the pet that killed it, Flame Aura did
+not burn the killer, Bonecrusher did not crack their shell. The last hit of a
+fight is the one that most needs to be paid for, and it was the only one that
+never was. Guarded by *"Zaptap answers a killing blow"*.
+
+The target is marked down *before* the reactions run, so anything a dying pet
+would apply to itself quietly no-ops while everything it aims outward lands. The
+attacker's `onKO` fires last, so a killer that got itself killed on the way in
+does not also collect the bounty.
+
+Two knockouts also stopped being credited at all: `Capitalize` and `Sunder` passed
+`source` where `dealDamage` reads `attacker`, so a kill by either left `killedBy`
+null — *Famine Feast* and *Parting Quills* never saw it.
+
+### Rules brought back in line with the cards
+
+| Change | Detail |
+|---|---|
+| **Damp has two flavours** | A popped Bubble Shield's soaking is permanent; Wear Down's stacks wash off when the attacker is hit. The cards disagreed on purpose |
+| **Stun stacks** | A second Stun costs a second turn instead of being swallowed |
+| **Static Shock** | 300% → **400%** Max ATK |
+| **Lifesteal** | 200% → **300%** Max ATK |
+| **Thunderstorm** | Now an Effect: 2 Stun Counters and 1 Zaptap, rather than a 200% attack |
+| **Quill Guard** | 3 → **2** stacks of Zaptap |
+| **Ossuary Guard** | 2 → **3** stacks of Bone Shield |
+| **Impenetrable** | −15 → **−10** Max ATK |
+| **Stage Fright** | 5 → **99** Stunt — the Special is locked for the match |
+| **Capitalize** | Charge wiped → **−50** charge |
+| **Second Stomach** | 1-in-10 → **1-in-6** |
+| **Electrocyclone** | 25% → **1/6** |
+| **Hellfire, Hex Claws** | Fire on any successful attack, not only standard ones |
+| **Stat lines resynced** | Scruffy SPC d25→d20 · Felightning HP 3→4 · Bubble Trouble HP 8→7 (both) · Mosstiff HP 5→6 · Bellybummer ATK d30→d40 · Dragon Turtle HP 8→7 and DEF d50→d40 |
+
+**Cursed was checked and left alone.** The card reads as though a stack is spent
+when the null procs; the intent is that stacks are *duration* — three turns at a
+flat 50% each, success or failure — which is what already shipped.
+
+### Modes
+
+The **Stable Gauntlet** (§11b) and **Match History** (§11c), plus an **Ace**
+draft option and a reversible level/Nature editor in the builder (§11).
+
+### Nine new assertions
+
+Zaptap answering a killing blow · on-damage passives running on a fatal hit ·
+Wear Down's Damp washing off · a Bubble Shield soaking staying · Poison never
+being spent by ticking · Sliced spending exactly one stack · a field outliving
+the pet that set it · Stunned stacking · First Impression firing once per enemy.
+**44 assertions total.**
+
+---
+
+## 15a. CHANGES IN v3.2
 
 ### Third wave
 
 Four more pets: **Thunder Lion** *(provisional name)*, **Bone Boar**,
-**Wild Cat** and **Dragon Turtle** — **24 species**. They brought one new
+**Wild Cat** and **Dragon Turtle** — **24 species** at the time. They brought one new
 status (Bone Shield), a Special that rolls off Max DEF, and the hooks
 `attackFlatMod`, `foeAttackMod` and `onBlocked`.
 
@@ -634,7 +818,7 @@ status (Bone Shield), a Special that rolls off Max DEF, and the hooks
 ### The roster doubled
 
 Nine pets joined: **Cerberus, Milk Truck, Balto, Watthog, Quillbacabra,
-Punchadillo, Mosstiff, Bellybummer** and **Mega Chicken** — 20 species in all.
+Punchadillo, Mosstiff, Bellybummer** and **Mega Chicken** — 20 species at the time.
 They were designed before the game became an autobattler, so a few mechanics had
 to be adapted; where a card gave no name for a Special or passive, the shipped
 name is marked `provisional: true` and is waiting on a real one.

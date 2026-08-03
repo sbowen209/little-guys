@@ -1,21 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   PET_DB, listSpecies, getSpecies, displayName, roleMeta,
-  createPetInstance, floorStat, ROLE_META, ROLE_ORDER, RULES,
+  createPetInstance, floorStat, levelUpPet, levelDownPet, rerollNaturesOn, tunePet,
+  ROLE_META, ROLE_ORDER, RULES,
 } from '../data/index.js';
 import { useSavedTeams } from '../hooks/useSavedTeams.js';
 import {
-  HeroAura, KitPanel, LibraryCard, SETUP_STYLES, ShowcaseImage, StatBadge, TypeChip,
+  AceToggle, HeroAura, KitPanel, LibraryCard, SETUP_STYLES, ShowcaseImage,
+  StatBadge, TuningBar, TypeChip,
 } from './SetupParts.jsx';
 import { assetUrl } from '../../utils/assets.js';
 
 const STAT_KEYS = ['atk', 'def', 'spc'];
-
-/** Level-ups grant one random die bump of 1d4 across ATK / DEF / SPC. */
-const rollLevelGain = () => ({
-  key: STAT_KEYS[Math.floor(Math.random() * STAT_KEYS.length)],
-  amount: Math.floor(Math.random() * 4) + 1,
-});
 
 const Shell = ({ children }) => (
   <div className="pet-setup relative min-h-screen w-full overflow-hidden bg-stone-950 font-sans text-stone-200">
@@ -49,10 +45,28 @@ const TeamThumbs = ({ team, mirrored }) => (
 
 /* ── MENU ────────────────────────────────────────────────────────── */
 
-function MenuView({ onBattle, onBuild, onBack }) {
+const MENU_CARD = 'group rounded-3xl border-2 border-stone-800 bg-stone-900/60 p-8 text-left backdrop-blur-md transition-all duration-300 hover:-translate-y-2 hover:bg-stone-800/80';
+
+function MenuCard({ title, blurb, accent, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className={`${MENU_CARD} ${accent.border} ${accent.shadow}`}>
+      <h2 className={`font-serif text-3xl font-black text-white transition-colors ${accent.text}`}>{title}</h2>
+      <p className="mt-3 font-mono text-xs leading-relaxed text-stone-400">{blurb}</p>
+    </button>
+  );
+}
+
+const ACCENTS = {
+  amber: { border: 'hover:border-amber-500', shadow: 'hover:shadow-[0_20px_40px_rgba(251,191,36,0.15)]', text: 'group-hover:text-amber-400' },
+  sky: { border: 'hover:border-sky-500', shadow: 'hover:shadow-[0_20px_40px_rgba(56,189,248,0.15)]', text: 'group-hover:text-sky-400' },
+  emerald: { border: 'hover:border-emerald-500', shadow: 'hover:shadow-[0_20px_40px_rgba(16,185,129,0.15)]', text: 'group-hover:text-emerald-400' },
+  violet: { border: 'hover:border-violet-500', shadow: 'hover:shadow-[0_20px_40px_rgba(139,92,246,0.15)]', text: 'group-hover:text-violet-400' },
+};
+
+function MenuView({ onBattle, onBuild, onGauntlet, onHistory, onBack }) {
   return (
     <Shell>
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6">
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-12">
         <div className="flex w-full max-w-4xl flex-col gap-8 text-center">
           <h1 className="bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 bg-clip-text font-serif text-6xl font-black tracking-tighter text-transparent drop-shadow-[0_2px_15px_rgba(251,191,36,0.35)] md:text-8xl">
             PET BATTLER
@@ -61,27 +75,31 @@ function MenuView({ onBattle, onBuild, onBack }) {
             Tactical 1v1 dice autobattler
           </p>
 
-          <div className="mt-4 grid grid-cols-1 gap-8 md:grid-cols-2">
-            <button
-              type="button"
+          <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <MenuCard
+              title="Stable Gauntlet"
+              accent={ACCENTS.emerald}
+              onClick={onGauntlet}
+              blurb="Divide your stable into squads and take on a rival kennel over a whole series."
+            />
+            <MenuCard
+              title="Battle Arena"
+              accent={ACCENTS.amber}
               onClick={onBattle}
-              className="group rounded-3xl border-2 border-stone-800 bg-stone-900/60 p-10 backdrop-blur-md transition-all duration-300 hover:-translate-y-2 hover:border-amber-500 hover:bg-stone-800/80 hover:shadow-[0_20px_40px_rgba(251,191,36,0.15)]"
-            >
-              <h2 className="font-serif text-4xl font-black text-white transition-colors group-hover:text-amber-400">Battle Arena</h2>
-              <p className="mt-4 font-mono text-sm leading-relaxed text-stone-400">
-                Pick two saved rosters and watch the match resolve itself.
-              </p>
-            </button>
-            <button
-              type="button"
+              blurb="Pick two saved rosters and watch the match resolve itself."
+            />
+            <MenuCard
+              title="Team Builder"
+              accent={ACCENTS.sky}
               onClick={onBuild}
-              className="group rounded-3xl border-2 border-stone-800 bg-stone-900/60 p-10 backdrop-blur-md transition-all duration-300 hover:-translate-y-2 hover:border-sky-500 hover:bg-stone-800/80 hover:shadow-[0_20px_40px_rgba(56,189,248,0.15)]"
-            >
-              <h2 className="font-serif text-4xl font-black text-white transition-colors group-hover:text-sky-400">Team Builder</h2>
-              <p className="mt-4 font-mono text-sm leading-relaxed text-stone-400">
-                Draft pets, roll Natures, level them up and lock in your deployment order.
-              </p>
-            </button>
+              blurb="Draft pets, roll Natures, level them up and lock in your deployment order."
+            />
+            <MenuCard
+              title="Battle History"
+              accent={ACCENTS.violet}
+              onClick={onHistory}
+              blurb="Every duel and gauntlet you have run, kept in this browser."
+            />
           </div>
 
           <button
@@ -151,6 +169,8 @@ function RosterEditView({ index, initial, onSave, onCancel }) {
   const [selection, setSelection] = useState(null); // { source: 'roster'|'library', id }
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [tuning, setTuning] = useState(false);
+  /** Sticky across drafts — an Ace run is usually an Ace run for the whole team. */
+  const [ace, setAce] = useState(false);
   const [flash, setFlash] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
 
@@ -172,11 +192,27 @@ function RosterEditView({ index, initial, onSave, onCancel }) {
 
   const draft = useCallback((speciesId) => {
     if (team.pets.length >= RULES.TEAM_SIZE) return;
-    const instance = createPetInstance(speciesId);
+    const instance = createPetInstance(speciesId, Math.random, { ace });
     setTeam((previous) => ({ ...previous, pets: [...previous.pets, instance] }));
     setSelection({ source: 'roster', id: instance.instanceId });
     setTuning(false);
-  }, [team.pets.length]);
+  }, [team.pets.length, ace]);
+
+  /** Applies an edit to one drafted pet and flashes whichever die it moved. */
+  const editPet = useCallback((instanceId, transform) => {
+    setTeam((previous) => ({
+      ...previous,
+      pets: previous.pets.map((pet) => {
+        if (pet.instanceId !== instanceId) return pet;
+        const next = transform(pet);
+        if (next.lastGain) {
+          setFlash(next.lastGain.key);
+          setTimeout(() => setFlash(null), 1100);
+        }
+        return next;
+      }),
+    }));
+  }, []);
 
   const release = useCallback((instanceId) => {
     setTeam((previous) => ({ ...previous, pets: previous.pets.filter((pet) => pet.instanceId !== instanceId) }));
@@ -193,31 +229,10 @@ function RosterEditView({ index, initial, onSave, onCancel }) {
     });
   }, []);
 
-  const levelUp = useCallback((instanceId) => {
-    const gain = rollLevelGain();
-    setFlash(gain.key);
-    setTimeout(() => setFlash(null), 1100);
-    setTeam((previous) => ({
-      ...previous,
-      pets: previous.pets.map((pet) => (
-        pet.instanceId === instanceId && pet.level < RULES.MAX_LEVEL
-          ? { ...pet, level: pet.level + 1, stats: { ...pet.stats, [gain.key]: pet.stats[gain.key] + gain.amount } }
-          : pet
-      )),
-    }));
-  }, []);
-
-  const tune = useCallback((instanceId, key, delta) => {
-    setTeam((previous) => ({
-      ...previous,
-      pets: previous.pets.map((pet) => {
-        if (pet.instanceId !== instanceId) return pet;
-        const next = pet.stats[key] + delta;
-        if (next < floorStat(pet, key)) return pet;
-        return { ...pet, stats: { ...pet.stats, [key]: next } };
-      }),
-    }));
-  }, []);
+  const tune = useCallback(
+    (instanceId, key, delta) => editPet(instanceId, (pet) => tunePet(pet, key, delta)),
+    [editPet],
+  );
 
   return (
     <div className="pet-setup relative flex h-screen w-full flex-col overflow-hidden bg-stone-950 font-sans text-stone-200">
@@ -269,6 +284,11 @@ function RosterEditView({ index, initial, onSave, onCancel }) {
                   {slot === 0 && (
                     <span className="absolute -left-2 -top-2 z-20 rounded border border-amber-400 bg-amber-500 px-1.5 py-0.5 font-mono text-[8px] font-black uppercase text-amber-950 shadow-lg">
                       Lead
+                    </span>
+                  )}
+                  {pet.ace && (
+                    <span className="absolute -bottom-1.5 left-1 z-20 font-mono text-[9px] font-black leading-none text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]">
+                      ★
                     </span>
                   )}
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-600 bg-stone-950">
@@ -335,6 +355,11 @@ function RosterEditView({ index, initial, onSave, onCancel }) {
                 {species.isPreset && (
                   <span className="rounded bg-amber-500 px-2 py-0.5 font-mono text-[9px] font-black uppercase text-amber-950">Preset</span>
                 )}
+                {rosterPet?.ace && (
+                  <span className="rounded bg-gradient-to-r from-amber-300 to-amber-500 px-2 py-0.5 font-mono text-[9px] font-black uppercase text-amber-950 shadow-[0_0_12px_rgba(251,191,36,0.5)]">
+                    ★ Ace
+                  </span>
+                )}
               </div>
 
               <h2 className="mb-2 font-serif text-5xl font-black leading-none tracking-tight text-white drop-shadow-xl lg:text-6xl">
@@ -376,46 +401,42 @@ function RosterEditView({ index, initial, onSave, onCancel }) {
                 ))}
               </div>
 
-              <div className="mb-8 flex items-center gap-4">
-                {selection?.source === 'library' ? (
+              {selection?.source === 'library' ? (
+                <div className="mb-8 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={() => draft(species.id)}
                     disabled={team.pets.length >= RULES.TEAM_SIZE}
-                    className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-8 py-3 font-mono text-sm font-bold uppercase tracking-widest text-amber-400 transition-colors hover:bg-amber-500/20 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="h-11 rounded-lg border border-amber-500/50 bg-amber-500/10 px-8 font-mono text-sm font-bold uppercase tracking-widest text-amber-400 transition-colors hover:bg-amber-500/20 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {team.pets.length >= RULES.TEAM_SIZE ? 'Roster full' : 'Draft to team'}
                   </button>
-                ) : (
-                  <>
-                    {level < RULES.MAX_LEVEL ? (
-                      <button
-                        type="button"
-                        onClick={() => levelUp(rosterPet.instanceId)}
-                        className="rounded-lg bg-white px-8 py-3 font-mono text-sm font-black uppercase tracking-widest text-stone-950 shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-105 hover:bg-stone-200"
-                      >
-                        Level up (+1d4 to a die)
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-                        <span className="text-xl leading-none text-emerald-400">✓</span>
-                        <span className="font-mono text-xs font-bold uppercase tracking-widest text-emerald-400">Max level</span>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setTuning((value) => !value)}
-                      className={`rounded-lg border px-6 py-3 font-mono text-sm font-bold uppercase tracking-widest transition-all ${
-                        tuning
-                          ? 'border-amber-500 bg-amber-500/20 text-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
-                          : 'border-stone-600 bg-stone-800/50 text-stone-400 hover:bg-stone-700 hover:text-white'
-                      }`}
-                    >
-                      {tuning ? 'Done' : 'Manual balance'}
-                    </button>
-                  </>
-                )}
-              </div>
+                  <AceToggle
+                    ace={ace}
+                    disabled={species.isPreset}
+                    onToggle={() => setAce((value) => !value)}
+                  />
+                  {ace && !species.isPreset && (
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-amber-400/70">
+                      Every Nature will roll positive
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <TuningBar
+                  level={level}
+                  minLevel={species.level ?? 1}
+                  maxLevel={RULES.MAX_LEVEL}
+                  isPreset={Boolean(species.isPreset)}
+                  ace={Boolean(rosterPet?.ace)}
+                  tuning={tuning}
+                  onLevelUp={() => editPet(rosterPet.instanceId, (pet) => levelUpPet(pet))}
+                  onLevelDown={() => editPet(rosterPet.instanceId, levelDownPet)}
+                  onReroll={() => editPet(rosterPet.instanceId, (pet) => rerollNaturesOn(pet, { ace: pet.ace }))}
+                  onToggleAce={() => editPet(rosterPet.instanceId, (pet) => rerollNaturesOn(pet, { ace: !pet.ace }))}
+                  onToggleTuning={() => setTuning((value) => !value)}
+                />
+              )}
 
               <KitPanel species={species} level={level} />
             </div>
@@ -519,7 +540,12 @@ function BattleSelectView({ teams, onBack, onBuild, onBegin }) {
       level: pet.level,
       stats: { ...pet.stats },
     }));
-    onBegin({ team1: hydrate(picks[0]), team2: hydrate(picks[1]) });
+    onBegin({
+      team1: hydrate(picks[0]),
+      team2: hydrate(picks[1]),
+      // Carried alongside so the ledger can name the rosters afterwards.
+      teams: [teams[picks[0]], teams[picks[1]]],
+    });
   };
 
   return (
@@ -585,7 +611,7 @@ function BattleSelectView({ teams, onBack, onBuild, onBegin }) {
 
 /* ── ROUTER ──────────────────────────────────────────────────────── */
 
-export default function PetSetup({ onBack, onBeginBattle }) {
+export default function PetSetup({ onBack, onBeginBattle, onGauntlet, onHistory }) {
   const { teams, saveTeam } = useSavedTeams();
   const [view, setView] = useState('menu');
   const [editing, setEditing] = useState(null);
@@ -626,6 +652,8 @@ export default function PetSetup({ onBack, onBeginBattle }) {
     <MenuView
       onBattle={() => setView('battle_select')}
       onBuild={() => setView('builder_list')}
+      onGauntlet={onGauntlet}
+      onHistory={onHistory}
       onBack={onBack}
     />
   );
