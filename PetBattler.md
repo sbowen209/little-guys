@@ -168,7 +168,7 @@ fails loudly if the behaviour disappears again. **Do not remove that assertion.*
 | **Powerful** | Buff | Your attacks deal at least 2 damage. One stack consumed per attack that **lands** |
 | **Bleed** | Debuff | At the start of your turn, roll `1d4` per stack. Each `1` deals 1 damage and clears that stack |
 | **Bone Shield** | Buff | +5 Max DEF per stack. One stack is stripped whenever an attack damages you |
-| **Poison** | Debuff | At the start of your turn, roll `1d6` per stack. Each `1` deals 1 damage. **The stack is not spent** — poison never wears off |
+| **Poison** | Debuff | At the start of your turn, roll `1d6` per stack. Each `1` deals its captured potency (1, or 2 from *Virulence*). **The stack is not spent** — poison never wears off |
 | **Sliced** | Debuff | When an attack damages you, a flat 50% chance to spend a stack and take 1 more damage. Rolled once per incoming attack, and folded into that hit rather than landing as a second one |
 | **Stagnation** | System | See §8 |
 
@@ -331,9 +331,9 @@ Every pet has a passive at Level 1 and a second at Level 5.
 | Wild Cat | **Ambush Instinct** *(prov.)* — advantage against enemies whose Special meter is at least half full | **Scent of Blood** *(prov.)* — +5 Max ATK per pet already defeated on the enemy team |
 | Dragon Turtle | **Wear Down** — an attack that fails against you leaves the attacker *washable* Damp | **Impenetrable** — Attacker-role units roll at 10 less Max ATK against you |
 | Decrephin | **Dolphangs** — at 2 hearts or fewer, every successful attack inflicts Bleed | *(unwritten)* |
-| Slicer | **Wristblades** — successful attacks have a 25% chance to inflict 1 Sliced | *(unwritten)* |
+| Slicer | **Wristblades** — successful attacks have a 25% chance to inflict 1 Sliced | **Open Wounds** *(prov.)* — advantage against an enemy already carrying Sliced |
 | Electrephant | **First Impression** *(prov.)* — the first hit on any given enemy adds 2 extra Stun Counters, three with the role's own | *(unwritten)* |
-| Swamp Fennec | **Toxic Terrain** *(Legendary)* — on entry the arena turns toxic for the rest of the match | **Venom Blood** *(prov.)* — immune to Poison; 25% to Poison the foe when damaged |
+| Swamp Fennec | **Toxic Terrain** *(Legendary)* + **Venom Blood** *(prov.)* — the arena turns toxic on entry; immune to Poison, 25% to Poison the foe when damaged | **Virulence** *(prov.)* — Poison you inflict bites for 2 a tick instead of 1 |
 
 **Bonding** is a species tag rather than a hard-coded pairing: both Bubble
 Troubles carry `bond: 'bubble'`, and *Lovey Dovey* fires for any ally sharing
@@ -379,8 +379,8 @@ change to that species' Special or passives is inherited automatically.
 |---|---|---|---|---|
 | **Fluffy** | Hellhound (Affinity) | 5 | +4 / −4 / +4 | HP 5 · d45 / d36 / d43 |
 | **Fuzzy** | Hellhound (Physical) | 5 | +11 / +8 / −3 | HP 5 · d69 / d42 / d29 |
-| **Lovey** | Bubble Trouble (Physical) | 2 | +1 / +1 / +3 | HP 8 · d22 / d51 / d33 |
-| **Dovey** | Bubble Trouble (Affinity) | 2 | −3 / −7 / −8 | HP 8 · d20 / d43 / d22 |
+| **Lovey** | Bubble Trouble (Physical) | 2 | +1 / +1 / +3 | HP 7 · d22 / d51 / d33 |
+| **Dovey** | Bubble Trouble (Affinity) | 2 | −3 / −7 / −8 | HP 7 · d20 / d43 / d22 |
 | **Fish Sticks** | Decrephin | 2 | −4 / −6 / −2 | HP 4 · d46 / d22 / d28 |
 | **Celery** | Slicer | 3 | +16 / −4 / −4 | HP 5 · d64 / d28 / d26 |
 | **Peanut** | Electrephant | 2 | −4 / −3 / +3 | HP 7 · d23 / d42 / d28 |
@@ -435,20 +435,24 @@ from then on is reversible.
 
 ## 11b. THE STABLE GAUNTLET
 
-A series against a generated rival kennel, and the only mode where the player's
-own stable is the roster.
+A hot-seat series and the only mode where the player's own stable is the roster.
 
-- Pick **1, 2 or 3** rival squads. The stable is divided into the same number,
+**Nobody is generated.** Player 1 divides the stable into squads; player 2
+answers by picking the same number of saved rosters. An earlier build generated
+the opposition, which meant the interesting half of the matchup was written by a
+random number generator — now both sides are somebody's choices, and there is no
+opponent AI to tune or to argue with.
+
+- Pick **1, 2 or 3** squads a side. The stable is divided into that many,
   **with no pet in two squads**. Pets may be left out entirely.
-- Each rival squad is generated to **match the player squad it faces** in size
-  and average level, and is levelled by rolling the same `1d4` per level the
-  builder rolls — so it is built by the player's rules, not handed a flat bonus.
+- Player 2 then picks that many saved rosters, **in order** — their first pick
+  faces Squad 1, and the fixture list is shown before anyone commits.
 - **1 squad** — a single match settles it.
-- **2 squads** — two matches. A **1–1 split forces a decider**, for which each
-  side drafts a third squad from the pets across *its own two squads*. The pets
-  you spread thin over the first two rounds are exactly the ones you get to
-  concentrate for the last. The AI concentrates by raw power score.
-- **3 squads** — best of three; a 2–0 sweep ends it without a third match.
+- **2 squads** — two matches. A **1-1 split forces a decider**: each side drafts
+  a third squad from the pets across *its own two squads*, player 1 first and
+  player 2 blind to that pick. The pets you spread thin over the first two rounds
+  are exactly the ones you get to concentrate for the last.
+- **3 squads** — best of three; a 2-0 sweep ends it without a third match.
 - A drawn match counts for neither side and the series plays on.
 
 The rules are pure and live in `engine/gauntlet.js` as a small state machine:
@@ -457,10 +461,12 @@ by handing back results. Nothing about it touches the simulator.
 
 ### Why the module routes itself
 
-A series is several matches with a draft in the middle, and `App.jsx` had nowhere
-to keep that across a trip into the arena. `Pets/PetBattler.jsx` now owns the
-module's routing — menu, builder, gauntlet, arena, history — and App renders that
-one component.
+A series is several matches with two drafts in the middle, and `App.jsx` had
+nowhere to keep that across a trip into the arena. `Pets/PetBattler.jsx` now owns
+the module's routing — menu, builder, gauntlet, arena, history — and App renders
+that one component. It also owns the saved rosters, so the gauntlet's rival
+picker sees a roster the moment the builder saves it rather than a copy loaded at
+mount.
 
 ---
 
@@ -701,7 +707,7 @@ node src/Pets/engine/balance.mjs 2000 5      # level 5 — every second passive 
 ```
 
 Reports average and longest match length, draw rate, a solo win-rate table for
-every species, a **5v5 roster contribution table**, and **44 rule assertions**.
+every species, a **5v5 roster contribution table**, and **45 rule assertions**.
 Run it at both levels: several rules
 only exist once the Lv.5 passives are live, and a pet can be fine at one level
 and broken at the other.
@@ -728,9 +734,15 @@ Fennec** — for **28 species**, and four more stable presets (Fish Sticks,
 Celery, Peanut, Syrup) for **8**. They brought two statuses (Poison, Sliced),
 the game's first **field effect** and its first **Legendary** passive.
 
-Every one of their cards left the Level 5 passive written as `xxx`, so all four
-ship with a single passive and gain nothing at Lv.5. That slot is unwritten, not
+Every one of their cards left the Level 5 passive written as `xxx`. Slicer and
+Swamp Fennec have since been given one — *Open Wounds* and *Virulence*, both
+marked provisional and both built on what their Lv.1 already does. **Decrephin
+and Electrephant still gain nothing at Lv.5**; those slots are unwritten, not
 lost.
+
+Swamp Fennec is the only pet with **two passives online at Level 1**: a
+Legendary is always active, so Toxic Terrain and Venom Blood both run from the
+opening bell and Virulence joins them at 5.
 
 ### Field effects
 
@@ -775,11 +787,33 @@ null — *Famine Feast* and *Parting Quills* never saw it.
 | **Second Stomach** | 1-in-10 → **1-in-6** |
 | **Electrocyclone** | 25% → **1/6** |
 | **Hellfire, Hex Claws** | Fire on any successful attack, not only standard ones |
-| **Stat lines resynced** | Scruffy SPC d25→d20 · Felightning HP 3→4 · Bubble Trouble HP 8→7 (both) · Mosstiff HP 5→6 · Bellybummer ATK d30→d40 · Dragon Turtle HP 8→7 and DEF d50→d40 |
+| **Stat lines resynced** | Scruffy SPC d25→d20 · Felightning HP 3→4 · Bubble Trouble HP 8→7, Lovey and Dovey with it · Mosstiff HP 5→6 · Bellybummer ATK d30→d40 · Dragon Turtle HP 8→7 and DEF d50→d40 |
 
 **Cursed was checked and left alone.** The card reads as though a stack is spent
 when the null procs; the intent is that stacks are *duration* — three turns at a
 flat 50% each, success or failure — which is what already shipped.
+
+### Potency, generalised
+
+Burn has always captured its damage from whoever applied it, so a Hell Flames
+burn stays lethal on a pet that has changed hands. That is now true of **every**
+ticking status through the `tickPotency` hook — which is what lets *Virulence*
+make the Fennec's own Poison bite for 2 without making the Toxic Terrain it laid
+down any nastier.
+
+### Reading a status check
+
+All six rolled checks — Burn, Bleed, Poison, Sliced, Paralyzed, Cursed — share
+one card, and the wording is derived rather than written per status, so a new
+ticking status gets a correct card for free:
+
+- **the headline** is `−2` / `safe` for damage, `seized` / `clear` for Paralyzed,
+  `nulled` / `holds` for Cursed;
+- **the rule line** always reads *"1 or less on d6"*, plus *"· 2 each"* when the
+  stack was applied at raised potency;
+- **the stake line** says what the check cost — *"1 stack spent"*, or
+  **"stacks stay"** for Poison, which is the one rule the dice cannot show and
+  the thing a player staring at four poison bars most needs to know.
 
 ### Modes
 
@@ -790,9 +824,10 @@ draft option and a reversible level/Nature editor in the builder (§11).
 
 Zaptap answering a killing blow · on-damage passives running on a fatal hit ·
 Wear Down's Damp washing off · a Bubble Shield soaking staying · Poison never
-being spent by ticking · Sliced spending exactly one stack · a field outliving
-the pet that set it · Stunned stacking · First Impression firing once per enemy.
-**44 assertions total.**
+being spent by ticking · a ticking status biting for the potency it was applied
+with · Sliced spending exactly one stack · a field outliving the pet that set it ·
+Stunned stacking · First Impression firing once per enemy.
+**45 assertions total.**
 
 ---
 

@@ -21,6 +21,9 @@
  *   damageBonus      ({ ctx, self, target, damage, advantage }) -> number (added to damage;
  *                      `advantage` is the net the attack rolled with)
  *   burnPotency      ({ ctx, self })                      -> number (damage of Burns THIS pet applies)
+ *   tickPotency      ({ ctx, self, statusId })            -> number  damage per tick of any
+ *                      ticking status THIS pet applies. Captured when the status lands, so a
+ *                      stack stays as nasty as whoever inflicted it. The largest value wins
  *   onTurnStart      ({ ctx, self })                      -- self's turn began (not while Stunned)
  *   onAttackHit      ({ ctx, self, target, isSpecial })   -- landed an attack
  *   onAttackMiss     ({ ctx, self, target, isSpecial })   -- an attack was blocked
@@ -713,6 +716,19 @@ export const PASSIVES = {
       },
     },
   },
+  open_wounds: {
+    id: 'open_wounds',
+    name: 'Open Wounds',
+    provisional: true,
+    level: 5,
+    desc: 'Advantage on attacks against an enemy already carrying Sliced.',
+    hooks: {
+      /** Its own Lv.1 and its Special both hand out Sliced, so this is the
+       *  payoff for having done the cutting rather than a separate condition
+       *  to chase. */
+      attackAdvantage: ({ target }) => ((target.statuses[STATUS.SLICED]?.stacks ?? 0) > 0 ? 1 : 0),
+    },
+  },
 
   /* ── Electrephant ─────────────────────────────────────────────── */
   first_impression: {
@@ -761,6 +777,19 @@ export const PASSIVES = {
           ctx.applyStatus(foe, STATUS.POISON, 1, { source: self, label: 'Venom Blood' });
         }
       },
+    },
+  },
+  virulence: {
+    id: 'virulence',
+    name: 'Virulence',
+    provisional: true,
+    level: 5,
+    desc: 'Poison you inflict deals 2 damage a tick instead of 1.',
+    hooks: {
+      /** Potency is captured when the Poison lands, exactly like Hell Flames —
+       *  so a virulent stack keeps biting for 2 after the Fennec is long gone,
+       *  and the Toxic Terrain it laid down does not get stronger with it. */
+      tickPotency: ({ statusId }) => (statusId === STATUS.POISON ? 2 : 0),
     },
   },
 };

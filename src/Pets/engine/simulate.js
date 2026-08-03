@@ -172,6 +172,17 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       const potency = best(source, 'burnPotency', STATUS_DEFS[STATUS.BURN].defaultPotency);
       meta.potency = Math.max(target.statuses[id]?.potency ?? 0, potency);
     }
+    /**
+     * The same idea, generalised to every ticking status: damage is captured
+     * from the applier when the status lands, so a stack stays as nasty as
+     * whoever inflicted it regardless of who is carrying it later. Burn keeps
+     * its own bespoke hook because it predates this.
+     */
+    const tick = STATUS_DEFS[id]?.tickOnTurn;
+    if (tick) {
+      const potency = best(source, 'tickPotency', tick.damage ?? 0, { statusId: id });
+      meta.potency = Math.max(target.statuses[id]?.potency ?? 0, potency);
+    }
 
     const total = addStacks(target, id, stacks, meta);
     emit(EV.STATUS_APPLY, {
@@ -648,6 +659,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
   const tickTurnStatuses = (pet) => {
     for (const { id, def, stacks } of statusesWith(pet, 'tickOnTurn')) {
       const spec = def.tickOnTurn;
+      const potency = pet.statuses[id]?.potency ?? spec.damage ?? 0;
       const rolls = [];
       let procs = 0;
 
@@ -657,12 +669,12 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
         if (spec.procValues.includes(roll)) procs += 1;
       }
 
-      const damage = procs * (spec.damage ?? 0);
+      const damage = procs * potency;
       const cleared = spec.clearOnProc ? procs : 0;
 
       emit(EV.STATUS_TICK, {
         side: pet.side, slot: pet.slot, status: id, name: def.name,
-        dieSize: spec.dieSize, rolls, procValues: spec.procValues, cleared, damage,
+        dieSize: spec.dieSize, rolls, procValues: spec.procValues, cleared, damage, potency,
       });
 
       if (cleared > 0) removeStacks(pet, id, cleared);

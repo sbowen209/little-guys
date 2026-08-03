@@ -51,7 +51,7 @@ export const PRESETS = {
     variant: null,
     level: 2,
     natures: { atk: 1, def: 1, spc: 3 },
-    base: { hp: 8, atk: 22, def: 51, spc: 33 },
+    base: { hp: 7, atk: 22, def: 51, spc: 33 },
     flavor: 'Runs the shield. Feeds charge to Dovey and takes it right back.',
   }),
 
@@ -60,7 +60,7 @@ export const PRESETS = {
     variant: null,
     level: 2,
     natures: { atk: -3, def: -7, spc: -8 },
-    base: { hp: 8, atk: 20, def: 43, spc: 22 },
+    base: { hp: 7, atk: 20, def: 43, spc: 22 },
     flavor: 'Weak on paper. Never charges alone.',
   }),
 

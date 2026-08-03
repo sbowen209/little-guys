@@ -12,10 +12,10 @@ import BattleArena from './ui/BattleArena.jsx';
 import MatchHistory from './setup/MatchHistory.jsx';
 import { GauntletSetupView, DeciderDraftView } from './setup/GauntletSetup.jsx';
 import { useMatchHistory, summariseTeam } from './hooks/useMatchHistory.js';
+import { useSavedTeams } from './hooks/useSavedTeams.js';
 import { getSpecies } from './data/index.js';
 import {
-  generateOpponentSeries, createSeries, nextStep, recordResult, setDecider,
-  seriesScore, buildOpponentDecider,
+  createSeries, nextStep, recordResult, setDecider, seriesScore,
 } from './engine/gauntlet.js';
 import { SETUP_STYLES } from './setup/SetupParts.jsx';
 
@@ -132,7 +132,12 @@ export default function PetBattler({ onBack }) {
    * chance to read the end card.
    */
   const [pending, setPending] = useState(null);
+  /** Player 1's decider squad, held while player 2 drafts theirs. */
+  const [deciderDraft, setDeciderDraft] = useState(null);
   const { history, record, remove, clear } = useMatchHistory();
+  // Lifted out of PetSetup so the gauntlet's rival picker sees a roster the
+  // moment the builder saves it, rather than a copy loaded at mount.
+  const { teams: savedTeams, saveTeam } = useSavedTeams();
 
   const step = useMemo(() => (series ? nextStep(series) : null), [series]);
 
@@ -162,8 +167,9 @@ export default function PetBattler({ onBack }) {
 
   /* ── Gauntlet ───────────────────────────────────────────────────── */
 
-  const beginGauntlet = useCallback(({ teams }) => {
-    setSeries(createSeries(teams, generateOpponentSeries(teams)));
+  const beginGauntlet = useCallback(({ teams, opponentTeams }) => {
+    setSeries(createSeries(teams, opponentTeams));
+    setDeciderDraft(null);
     setView('gauntlet');
   }, []);
 
@@ -176,12 +182,17 @@ export default function PetBattler({ onBack }) {
     setPending(null);
   }, [pending]);
 
-  const confirmDecider = useCallback((playerTeam) => {
-    setSeries((current) => setDecider(
-      current,
-      playerTeam,
-      buildOpponentDecider(current.opponentTeams, playerTeam.pets.length),
-    ));
+  /**
+   * Both sides draft their decider, one after the other. Player 1's squad is
+   * parked until player 2 has locked theirs, so neither is drafting against a
+   * known answer.
+   */
+  const confirmDecider = useCallback((team) => {
+    setDeciderDraft((first) => {
+      if (!first) return team;
+      setSeries((current) => setDecider(current, first, team));
+      return null;
+    });
   }, []);
 
   /**
@@ -207,6 +218,7 @@ export default function PetBattler({ onBack }) {
   const leaveGauntlet = useCallback(() => {
     setSeries(null);
     setPending(null);
+    setDeciderDraft(null);
     setView('setup');
   }, []);
 
@@ -224,19 +236,33 @@ export default function PetBattler({ onBack }) {
   }
 
   if (view === 'gauntlet_setup') {
-    return <GauntletSetupView onBack={() => setView('setup')} onBegin={beginGauntlet} />;
+    return (
+      <GauntletSetupView
+        savedTeams={savedTeams}
+        onBack={() => setView('setup')}
+        onBuild={() => setView('setup')}
+        onBegin={beginGauntlet}
+      />
+    );
   }
 
   if (view === 'gauntlet' && series && step) {
     if (step.kind === 'decider') {
-      return <DeciderDraftView series={series} onConfirm={confirmDecider} />;
+      return (
+        <DeciderDraftView
+          key={deciderDraft ? 'rival' : 'player'}
+          series={series}
+          side={deciderDraft ? 1 : 0}
+          onConfirm={confirmDecider}
+        />
+      );
     }
 
     if (step.kind === 'done') {
       return (
         <SeriesSummary
           series={series}
-          onRematch={() => { setSeries(null); setView('gauntlet_setup'); }}
+          onRematch={() => { setSeries(null); setDeciderDraft(null); setView('gauntlet_setup'); }}
           onExit={leaveGauntlet}
         />
       );
@@ -271,6 +297,8 @@ export default function PetBattler({ onBack }) {
 
   return (
     <PetSetup
+      teams={savedTeams}
+      saveTeam={saveTeam}
       onBack={onBack}
       onBeginBattle={beginDuel}
       onGauntlet={() => setView('gauntlet_setup')}

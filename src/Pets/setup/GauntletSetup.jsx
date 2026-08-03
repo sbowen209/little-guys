@@ -83,11 +83,15 @@ function StablePet({ pet, assignment, onClick, dimmed, order }) {
 
 /* ── DIVIDING THE STABLE ─────────────────────────────────────────── */
 
-export function GauntletSetupView({ onBack, onBegin }) {
+export function GauntletSetupView({ onBack, onBegin, savedTeams, onBuild }) {
   const [format, setFormat] = useState(2);
   /** instanceId -> team index. Absent means benched for this gauntlet. */
   const [assigned, setAssigned] = useState({});
   const [activeTeam, setActiveTeam] = useState(0);
+  /** 'divide' — player 1 splits the stable · 'rivals' — player 2 answers. */
+  const [stage, setStage] = useState('divide');
+  /** Indices into savedTeams, in pick order: rival squad 1 faces yours, and so on. */
+  const [rivalPicks, setRivalPicks] = useState([]);
 
   // The stable is the preset roster: fresh instances each visit, because a
   // gauntlet never edits the pets, it only arranges them.
@@ -152,24 +156,175 @@ export function GauntletSetupView({ onBack, onBegin }) {
   const allFilled = teams.every((team) => team.length > 0);
   const ready = allFilled && !overSized;
 
+  /** Saved rosters with anything in them — the pool player 2 answers from. */
+  const available = useMemo(
+    () => savedTeams
+      .map((team, index) => ({ team, index }))
+      .filter(({ team }) => team.pets.length > 0),
+    [savedTeams],
+  );
+
+  const toggleRival = useCallback((index) => {
+    setRivalPicks((previous) => {
+      if (previous.includes(index)) return previous.filter((i) => i !== index);
+      if (previous.length >= format) return previous;
+      return [...previous, index];
+    });
+  }, [format]);
+
   const begin = () => {
-    if (!ready) return;
+    if (!ready || rivalPicks.length !== format) return;
     onBegin({
       format,
       teams: teams.map((pets, i) => ({
         id: `player_${i}`,
         name: `Squad ${i + 1}`,
+        // Fresh ids per squad: the stable is one pool and the same pet object
+        // must not carry a duplicate instanceId into two different matches.
         pets: pets.map((pet) => ({ ...pet, instanceId: `${pet.instanceId}@${i}` })),
       })),
+      opponentTeams: rivalPicks.map((index, i) => {
+        const team = savedTeams[index];
+        return {
+          id: `rival_${i}`,
+          name: team.name,
+          isOpponent: true,
+          pets: team.pets.map((pet) => ({ ...pet, instanceId: `${pet.instanceId}~${i}` })),
+        };
+      }),
     });
   };
+
+  /* ── STAGE 2: player 2 answers ─────────────────────────────────── */
+
+  if (stage === 'rivals') {
+    return (
+      <Shell>
+        <div className="relative z-10 mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-6 md:p-10">
+          <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-800 pb-6">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-rose-400">Player 2</p>
+              <h1 className="mt-2 font-serif text-4xl font-black text-white md:text-5xl">Pick the rivals</h1>
+              <p className="mt-3 font-mono text-xs uppercase tracking-widest text-stone-400">
+                Choose {format} saved roster{format === 1 ? '' : 's'} · order decides the fixtures
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStage('divide')}
+              className="rounded-lg border border-stone-700 bg-stone-900/50 px-6 py-3 font-mono text-xs uppercase tracking-widest text-stone-400 transition-colors hover:border-stone-500 hover:text-white"
+            >
+              Back to squads
+            </button>
+          </header>
+
+          {available.length < format ? (
+            <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed border-stone-700 bg-stone-900/30 p-12 text-center">
+              <span className="text-5xl opacity-50">⚠️</span>
+              <h2 className="font-serif text-2xl font-black text-white">Not enough saved rosters</h2>
+              <p className="max-w-md font-mono text-xs leading-relaxed text-stone-500">
+                Player 2 needs {format} roster{format === 1 ? '' : 's'} to answer with, and only{' '}
+                {available.length} {available.length === 1 ? 'has' : 'have'} pets in{' '}
+                {available.length === 1 ? 'it' : 'them'}. Build more in the Team Builder, or drop
+                the format down.
+              </p>
+              <button
+                type="button"
+                onClick={onBuild}
+                className="mt-2 rounded-sm bg-sky-500 px-8 py-3 font-mono text-sm font-black uppercase tracking-widest text-stone-950 transition-colors hover:bg-sky-400"
+              >
+                Go to Team Builder
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {available.map(({ team, index }) => {
+                const order = rivalPicks.indexOf(index);
+                return (
+                  <button
+                    key={team.id}
+                    type="button"
+                    onClick={() => toggleRival(index)}
+                    className={`relative flex flex-col gap-3 rounded-2xl border-2 p-4 text-left transition-all ${
+                      order >= 0
+                        ? 'border-rose-500 bg-rose-950/20 shadow-[0_0_20px_rgba(244,63,94,0.18)]'
+                        : 'border-stone-800 bg-stone-900/50 hover:border-stone-600'
+                    }`}
+                  >
+                    {order >= 0 && (
+                      <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500 font-mono text-xs font-black text-rose-950">
+                        {order + 1}
+                      </span>
+                    )}
+                    <span className="font-serif text-xl font-black text-stone-100">{team.name}</span>
+                    {order >= 0 && (
+                      <span className="font-mono text-[9px] uppercase tracking-widest text-rose-300">
+                        Faces Squad {order + 1}
+                      </span>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {team.pets.map((pet) => {
+                        const species = getSpecies(pet.speciesId);
+                        return (
+                          <div
+                            key={pet.instanceId}
+                            title={`${displayName(species)} · Lv.${pet.level}`}
+                            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-stone-700 bg-stone-950"
+                          >
+                            <img src={assetUrl(species.art)} alt="" className="h-8 origin-bottom scale-110 object-contain" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* The fixture list, so both players can see who fights whom. */}
+          {rivalPicks.length > 0 && (
+            <ol className="flex flex-col gap-2 rounded-2xl border border-stone-800 bg-stone-900/40 p-4">
+              {rivalPicks.map((index, i) => (
+                <li key={index} className="flex items-center justify-between font-mono text-xs">
+                  <span className="text-emerald-400">Squad {i + 1}</span>
+                  <span className="text-stone-600">vs</span>
+                  <span className="text-rose-400">{savedTeams[index].name}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <div className="flex flex-col items-center gap-3 py-6">
+            {rivalPicks.length !== format && (
+              <p className="font-mono text-[11px] uppercase tracking-widest text-amber-500/80">
+                {rivalPicks.length} of {format} rival squad{format === 1 ? '' : 's'} chosen
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={rivalPicks.length !== format}
+              onClick={begin}
+              className="group relative overflow-hidden rounded-sm bg-emerald-500 px-16 py-5 font-mono text-2xl font-black uppercase tracking-widest text-stone-950 shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all hover:scale-105 hover:bg-emerald-400 disabled:grayscale disabled:hover:scale-100"
+            >
+              <span className="pointer-events-none absolute inset-0 -translate-x-full -skew-x-12 bg-white/30 group-hover:animate-[petShine_0.7s_ease-out]" />
+              <span className="relative">Enter the Gauntlet</span>
+            </button>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  /* ── STAGE 1: player 1 divides the stable ──────────────────────── */
 
   return (
     <Shell>
       <div className="relative z-10 mx-auto flex w-full max-w-[1500px] flex-col gap-6 p-6 md:p-10">
         <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-800 pb-6">
           <div>
-            <h1 className="font-serif text-4xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.2)] md:text-5xl">
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-emerald-400">Player 1</p>
+            <h1 className="mt-2 font-serif text-4xl font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.2)] md:text-5xl">
               Stable Gauntlet
             </h1>
             <p className="mt-3 font-mono text-xs uppercase tracking-widest text-stone-400">
@@ -194,7 +349,7 @@ export function GauntletSetupView({ onBack, onBegin }) {
             <button
               key={count}
               type="button"
-              onClick={() => { setFormat(count); setActiveTeam(0); }}
+              onClick={() => { setFormat(count); setActiveTeam(0); setRivalPicks([]); }}
               className={`rounded-lg border-2 px-6 py-3 font-mono text-sm font-black uppercase tracking-widest transition-all ${
                 format === count
                   ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
@@ -324,11 +479,11 @@ export function GauntletSetupView({ onBack, onBegin }) {
           <button
             type="button"
             disabled={!ready}
-            onClick={begin}
+            onClick={() => setStage('rivals')}
             className="group relative overflow-hidden rounded-sm bg-emerald-500 px-16 py-5 font-mono text-2xl font-black uppercase tracking-widest text-stone-950 shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all hover:scale-105 hover:bg-emerald-400 disabled:grayscale disabled:hover:scale-100"
           >
             <span className="pointer-events-none absolute inset-0 -translate-x-full -skew-x-12 bg-white/30 group-hover:animate-[petShine_0.7s_ease-out]" />
-            <span className="relative">Enter the Gauntlet</span>
+            <span className="relative">Hand over to Player 2 →</span>
           </button>
         </div>
       </div>
@@ -339,13 +494,18 @@ export function GauntletSetupView({ onBack, onBegin }) {
 /* ── THE DECIDER ─────────────────────────────────────────────────── */
 
 /**
- * The 2-team format's third match. The pool is exactly the pets across that
+ * The 2-squad format's third match. The pool is exactly the pets across that
  * side's own two squads, so a stable spread thin over two rounds is the same
  * stable you get to concentrate for the last one.
+ *
+ * Both sides draft, one after the other, so this renders for whichever player
+ * is at the keyboard — `side` picks the pool, the accent and the wording.
  */
-export function DeciderDraftView({ series, onConfirm }) {
-  const pool = useMemo(() => deciderPool(series.playerTeams), [series]);
+export function DeciderDraftView({ series, side, onConfirm }) {
+  const teams = side === 0 ? series.playerTeams : series.opponentTeams;
+  const pool = useMemo(() => deciderPool(teams), [teams]);
   const [picked, setPicked] = useState([]);
+  const mine = side === 0;
 
   const limit = Math.min(RULES.TEAM_SIZE, pool.length);
   const toggle = (pet) => {
@@ -364,11 +524,14 @@ export function DeciderDraftView({ series, onConfirm }) {
     <Shell>
       <div className="relative z-10 mx-auto flex w-full max-w-[1200px] flex-col gap-6 p-6 md:p-10">
         <header className="border-b border-stone-800 pb-6 text-center">
-          <p className="font-mono text-xs uppercase tracking-[0.3em] text-amber-500">Series level at 1–1</p>
+          <p className={`font-mono text-xs uppercase tracking-[0.3em] ${mine ? 'text-emerald-400' : 'text-rose-400'}`}>
+            Series level at 1–1 · Player {side + 1}
+          </p>
           <h1 className="mt-2 font-serif text-4xl font-black text-white md:text-5xl">The Decider</h1>
           <p className="mx-auto mt-3 max-w-xl font-mono text-xs leading-relaxed text-stone-400">
-            Build one last squad from every pet across your two. Your rivals are doing the same
-            with theirs. Order matters — the first pick leads.
+            Build one last squad from every pet across your two.{' '}
+            {mine ? 'Player 2 drafts theirs next.' : 'Player 1 has already locked theirs in.'}{' '}
+            Order matters — the first pick leads.
           </p>
         </header>
 
@@ -383,12 +546,17 @@ export function DeciderDraftView({ series, onConfirm }) {
                 onClick={() => toggle(pet)}
                 className={`relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all ${
                   order >= 0
-                    ? 'border-amber-400 bg-amber-950/20 shadow-[0_0_20px_rgba(251,191,36,0.2)]'
+                    ? mine
+                      ? 'border-emerald-400 bg-emerald-950/20 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                      : 'border-rose-400 bg-rose-950/20 shadow-[0_0_20px_rgba(244,63,94,0.2)]'
                     : 'border-stone-800 bg-stone-900/50 hover:border-stone-600'
                 }`}
               >
                 {order >= 0 && (
-                  <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-md bg-amber-500 font-mono text-[10px] font-black text-amber-950">
+                  <span className={`absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-md font-mono text-[10px] font-black ${
+                    mine ? 'bg-emerald-500 text-emerald-950' : 'bg-rose-500 text-rose-950'
+                  }`}
+                  >
                     {order === 0 ? '★' : order + 1}
                   </span>
                 )}
@@ -412,14 +580,19 @@ export function DeciderDraftView({ series, onConfirm }) {
             type="button"
             disabled={team.length === 0}
             onClick={() => onConfirm({
-              id: 'player_decider',
-              name: 'Final Cut',
+              id: mine ? 'player_decider' : 'rival_decider',
+              name: mine ? 'Final Cut' : 'Rivals · Final Cut',
+              isOpponent: !mine,
               // Fresh ids: the same pet may have fought earlier in the series.
               pets: team.map((pet, i) => ({ ...pet, instanceId: `${pet.instanceId}#final${i}` })),
             })}
-            className="rounded-sm bg-amber-500 px-14 py-4 font-mono text-xl font-black uppercase tracking-widest text-stone-950 shadow-[0_0_30px_rgba(251,191,36,0.3)] transition-all hover:scale-105 hover:bg-amber-400 disabled:grayscale disabled:hover:scale-100"
+            className={`rounded-sm px-14 py-4 font-mono text-xl font-black uppercase tracking-widest text-stone-950 transition-all hover:scale-105 disabled:grayscale disabled:hover:scale-100 ${
+              mine
+                ? 'bg-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:bg-emerald-400'
+                : 'bg-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.3)] hover:bg-rose-400'
+            }`}
           >
-            Lock the Final Cut
+            {mine ? 'Lock it in · hand over' : 'Lock it in · fight'}
           </button>
         </div>
       </div>

@@ -4,7 +4,6 @@ import {
   createPetInstance, floorStat, levelUpPet, levelDownPet, rerollNaturesOn, tunePet,
   ROLE_META, ROLE_ORDER, RULES,
 } from '../data/index.js';
-import { useSavedTeams } from '../hooks/useSavedTeams.js';
 import {
   AceToggle, HeroAura, KitPanel, LibraryCard, SETUP_STYLES, ShowcaseImage,
   StatBadge, TuningBar, TypeChip,
@@ -611,8 +610,9 @@ function BattleSelectView({ teams, onBack, onBuild, onBegin }) {
 
 /* ── ROUTER ──────────────────────────────────────────────────────── */
 
-export default function PetSetup({ onBack, onBeginBattle, onGauntlet, onHistory }) {
-  const { teams, saveTeam } = useSavedTeams();
+/** Saved rosters are owned by PetBattler, so the gauntlet's rival picker and the
+ *  builder are always looking at the same list. */
+export default function PetSetup({ teams, saveTeam, onBack, onBeginBattle, onGauntlet, onHistory }) {
   const [view, setView] = useState('menu');
   const [editing, setEditing] = useState(null);
 

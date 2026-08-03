@@ -431,6 +431,8 @@ check('No match ended by running out of turns', capped === 0);
   let sawPermanentDamp = 0;
   let poisonSpent = 0;        // a Poison stack burned off by ticking
   let sawPoisonProc = 0;
+  let potencyMismatch = 0;    // a tick that ignored its captured potency
+  let sawVirulent = 0;        // a Poison stack applied by Virulence
   let slicedKept = 0;         // a Sliced proc that failed to spend its stack
   let sawSlicedProc = 0;
   let fieldLost = 0;          // a field that stopped being listed mid-match
@@ -509,6 +511,10 @@ check('No match ended by running out of turns', capped === 0);
         if (procs > 0) {
           sawPoisonProc += 1;
           if (e.cleared !== 0) poisonSpent += 1;
+          // Potency is captured from whoever applied the stack, so the damage
+          // must be procs x that potency and not the status's base damage.
+          if (e.damage !== procs * e.potency) potencyMismatch += 1;
+          if (e.potency > 1) sawVirulent += 1;
         }
       }
 
@@ -536,6 +542,8 @@ check('No match ended by running out of turns', capped === 0);
     sawPermanentDamp > 0 && permanentDampLost === 0);
   check(`Poison is never spent by ticking (${sawPoisonProc} procs)`,
     sawPoisonProc > 0 && poisonSpent === 0);
+  check(`A ticking status bites for the potency it was applied with (${sawVirulent} virulent ticks)`,
+    sawPoisonProc > 0 && potencyMismatch === 0 && sawVirulent > 0);
   check(`A Sliced proc spends exactly one stack (${sawSlicedProc} procs)`,
     sawSlicedProc > 0 && slicedKept === 0);
   check(`A field outlives the pet that set it (${sawField} established)`,

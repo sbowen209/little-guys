@@ -94,10 +94,31 @@ export const RollCards = memo(function RollCards({ event }) {
 
 /* ── STATUS CHECKS ───────────────────────────────────────────────── */
 
-const SUMMARY = {
-  burn: (e) => (e.damage > 0 ? `−${e.damage}` : 'safe'),
-  paralyzed: (e) => (e.skipped ? 'seized' : 'clear'),
-  cursed: (e) => (e.nullified ? 'nulled' : 'holds'),
+/**
+ * The headline outcome, derived rather than looked up per status — a new
+ * ticking status gets a correct card with no extra work, and the three kinds of
+ * check all read the same way.
+ *
+ *   damage checks   Burn, Bleed, Poison, Sliced   -> "−2" or "safe"
+ *   action checks   Paralyzed                     -> "seized" or "clear"
+ *   damage denial   Cursed                        -> "nulled" or "holds"
+ */
+const summaryFor = (event) => {
+  if (event.skipped !== undefined) return event.skipped ? 'seized' : 'clear';
+  if (event.nullified !== undefined) return event.nullified ? 'nulled' : 'holds';
+  return event.damage > 0 ? `−${event.damage}` : 'safe';
+};
+
+/**
+ * What the check cost, spelled out because it is the one rule the dice cannot
+ * show. Burn and Bleed spend the stack that fires; Poison does not, and a
+ * player watching four poison bars needs to know they will all be back next
+ * turn.
+ */
+const stakeFor = (event) => {
+  if (event.cleared > 0) return `${event.cleared} stack${event.cleared === 1 ? '' : 's'} spent`;
+  if (event.damage > 0) return 'stacks stay';
+  return null;
 };
 
 /**
@@ -116,7 +137,10 @@ export const CheckCard = memo(function CheckCard({ event }) {
     label: procs.has(value) ? '✦' : null,
   }));
 
-  const summary = (SUMMARY[event.status] ?? (() => ''))(event);
+  const stake = stakeFor(event);
+  // Potency is per-application, so a Hell Flames burn or a Virulence poison
+  // says so rather than leaving the player to wonder why it hit for double.
+  const perTick = event.potency > 1 && event.damage > 0 ? ` · ${event.potency} each` : '';
 
   return (
     <div
@@ -126,8 +150,11 @@ export const CheckCard = memo(function CheckCard({ event }) {
       <span className="pb-roll__tag">
         {def.icon} {def.name}{event.rolls.length > 1 ? ` ×${event.rolls.length}` : ''}
       </span>
-      <span className="pb-roll__value pb-roll__value--word">{summary}</span>
-      <span className="pb-roll__max">{threshold} or less on d{event.dieSize}</span>
+      <span className="pb-roll__value pb-roll__value--word">{summaryFor(event)}</span>
+      <span className="pb-roll__max">
+        {threshold} or less on d{event.dieSize}{perTick}
+      </span>
+      {stake && <span className="pb-roll__why">{stake}</span>}
       <DiceRow dice={dice} scale={event.dieSize} threshold={threshold} />
     </div>
   );

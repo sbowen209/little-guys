@@ -1,112 +1,30 @@
 /**
  * @file gauntlet.js
  * @description The Stable Gauntlet: a series of matches between the player's
- * stable, divided into teams, and an equal number of generated opponent teams.
+ * stable, divided into squads, and an equal number of opposing squads.
  *
- * Pure logic — no React, no storage, no randomness the caller cannot swap out.
- * The series is a small state machine the UI advances by handing it results.
+ * Pure logic — no React, no storage, no randomness. The series is a small state
+ * machine the UI advances by handing it results.
+ *
+ * ── TWO HUMANS, ONE SCREEN ─────────────────────────────────────────
+ * Nothing here generates an opponent. Player 1 divides their stable into
+ * squads; player 2 answers by picking the same number of saved rosters. The
+ * gauntlet is a hot-seat format, so both sides are somebody's choices and there
+ * is no AI to tune or to argue with.
  *
  * ── THE FORMAT ─────────────────────────────────────────────────────
- * The player picks 1, 2 or 3 opposing teams and divides their stable into the
- * same number of teams, with no pet appearing twice. Then:
- *
- *   1 team   a single match decides it.
- *   2 teams  two matches. A 1-1 split forces a DECIDER, for which each side
- *            builds a third team from the pets across its own two teams — so
- *            the pets you spread thin in the first two rounds are exactly the
- *            ones you get to concentrate for the last.
- *   3 teams  best of three; a 2-0 sweep ends it without a third match.
+ *   1 squad   a single match decides it.
+ *   2 squads  two matches. A 1-1 split forces a DECIDER, for which each side
+ *             builds a third squad from the pets across its own two — so the
+ *             pets you spread thin in the first two rounds are exactly the ones
+ *             you get to concentrate for the last. Both sides draft.
+ *   3 squads  best of three; a 2-0 sweep ends it without a third match.
  *
  * A drawn match counts for neither side and the series simply plays on.
  */
 
-import { RULES } from '../data/constants.js';
-import { SPECIES } from '../data/species.js';
-import { createPetInstance } from '../data/index.js';
-
-/** How many opposing teams the gauntlet supports. */
+/** How many squads a side fields. */
 export const GAUNTLET_FORMATS = [1, 2, 3];
-
-const OPPONENT_NAMES = [
-  'Kennel Row', 'The Bramble Pack', 'Ashfall Crew', 'Tidewatch',
-  'Gutter Kings', 'The Long Howl', 'Ninth Litter', 'Rust Chapel',
-  'Salt & Sinew', 'The Quiet Teeth',
-];
-
-const DRAFTABLE = Object.keys(SPECIES);
-
-const pickFrom = (list, random) => list[Math.floor(random() * list.length)];
-
-/**
- * Level-ups the same way the builder rolls them: 1d4 onto one random die each
- * time, so a generated opponent is built by the same rules as a player pet
- * rather than getting a flat bonus the player cannot match.
- */
-const levelTo = (instance, level, random) => {
-  const keys = ['atk', 'def', 'spc'];
-  const stats = { ...instance.stats };
-  const gains = [];
-  for (let i = instance.level; i < level; i += 1) {
-    const key = keys[Math.floor(random() * keys.length)];
-    const amount = Math.floor(random() * 4) + 1;
-    stats[key] += amount;
-    gains.push({ key, amount });
-  }
-  return { ...instance, level, stats, levelGains: [...(instance.levelGains ?? []), ...gains] };
-};
-
-/**
- * One generated team. `size` and `level` are matched to the player's
- * corresponding team so the series is a test of composition, not of who was
- * handed more pets or more level-ups.
- */
-export const generateOpponentTeam = (size, level, index, random = Math.random) => {
-  const used = new Set();
-  const pets = [];
-
-  while (pets.length < size) {
-    const speciesId = pickFrom(DRAFTABLE, random);
-    // No duplicates inside one generated team — a wall of five identical pets
-    // is neither interesting to watch nor a fair read on the player's roster.
-    if (used.has(speciesId) && used.size < DRAFTABLE.length) continue;
-    used.add(speciesId);
-    pets.push(levelTo(createPetInstance(speciesId, random), level, random));
-  }
-
-  return {
-    id: `ai_${index}_${Math.random().toString(36).slice(2, 8)}`,
-    name: OPPONENT_NAMES[Math.floor(random() * OPPONENT_NAMES.length)] ?? `Rival ${index + 1}`,
-    pets,
-    isOpponent: true,
-  };
-};
-
-/** The average level of a set of pets, rounded, floored at 1. */
-export const averageLevel = (pets) => {
-  if (!pets.length) return 1;
-  const total = pets.reduce((n, p) => n + (p.level ?? 1), 0);
-  return Math.max(1, Math.min(RULES.MAX_LEVEL, Math.round(total / pets.length)));
-};
-
-/**
- * Builds the opposing side, one team per player team, each mirroring that
- * team's size and average level. Names are made unique so the scoreboard never
- * shows the same rival twice.
- */
-export const generateOpponentSeries = (playerTeams, random = Math.random) => {
-  const names = new Set();
-  return playerTeams.map((team, i) => {
-    let generated = generateOpponentTeam(team.pets.length, averageLevel(team.pets), i, random);
-    let guard = 0;
-    while (names.has(generated.name) && guard < 12) {
-      generated = { ...generated, name: pickFrom(OPPONENT_NAMES, random) };
-      guard += 1;
-    }
-    if (names.has(generated.name)) generated = { ...generated, name: `${generated.name} II` };
-    names.add(generated.name);
-    return generated;
-  });
-};
 
 /* ── SERIES STATE ──────────────────────────────────────────────────── */
 
@@ -118,7 +36,7 @@ export const createSeries = (playerTeams, opponentTeams) => ({
   opponentTeams,
   /** One entry per match played: { winner: 0 | 1 | null, turns, seed }. */
   results: [],
-  /** Filled in only when a 2-team series reaches its decider. */
+  /** Filled in only when a 2-squad series reaches its decider. */
   decider: null,
 });
 
@@ -137,7 +55,7 @@ export const winsNeeded = (series) => (series.format === 1 ? 1 : 2);
 /**
  * What happens next. Returns one of:
  *   { kind: 'match', index, teams: [player, opponent] }
- *   { kind: 'decider' }   the 2-team format is level and both sides must draft
+ *   { kind: 'decider' }   the 2-squad format is level and both sides must draft
  *   { kind: 'done', winner }
  */
 export const nextStep = (series) => {
@@ -157,7 +75,7 @@ export const nextStep = (series) => {
     };
   }
 
-  // Every scheduled match is done and nobody has the target. In the 2-team
+  // Every scheduled match is done and nobody has the target. In the 2-squad
   // format that is the cue for the decider; anywhere else it is a drawn series.
   if (series.format === 2) {
     if (!series.decider) return { kind: 'decider' };
@@ -171,23 +89,8 @@ export const nextStep = (series) => {
   return { kind: 'done', winner: null };
 };
 
-/** Every pet a side may draw on for the decider: its own two teams, pooled. */
+/** Every pet a side may draw on for the decider: its own two squads, pooled. */
 export const deciderPool = (teams) => teams.flatMap((team) => team.pets);
-
-/**
- * The opponent's decider team: its strongest pets by a crude power score, so
- * the AI concentrates its pool the same way a player would rather than picking
- * at random.
- */
-export const buildOpponentDecider = (teams, size) => {
-  const power = (pet) => pet.stats.atk + pet.stats.def + pet.stats.spc + pet.stats.hp * 8;
-  const pets = deciderPool(teams)
-    .slice()
-    .sort((a, b) => power(b) - power(a))
-    .slice(0, Math.min(size, RULES.TEAM_SIZE));
-
-  return { id: 'ai_decider', name: 'Rivals · Final Cut', pets, isOpponent: true };
-};
 
 export const recordResult = (series, result) => ({
   ...series,

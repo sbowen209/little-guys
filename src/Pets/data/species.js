@@ -397,7 +397,7 @@ export const SPECIES = {
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.WATER },
     base: { hp: 5, atk: 45, def: 30, spc: 30 },
     special: 'sever',
-    passives: ['wristblades'],
+    passives: ['wristblades', 'open_wounds'],
     art: '/images/pets/Slicer.webp',
     facing: 'Right',
   },
@@ -426,7 +426,7 @@ export const SPECIES = {
     special: 'toxic_spray',
     /** The roster's first Legendary passive, which is simply one that is always
      *  online and marked as such for the builder — no engine concept of its own. */
-    passives: ['toxic_terrain', 'venom_blood'],
+    passives: ['toxic_terrain', 'venom_blood', 'virulence'],
     art: '/images/pets/SwampFennec.webp',
     facing: 'Left',
   },
