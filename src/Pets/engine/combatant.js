@@ -117,11 +117,27 @@ export const specialBlocked = (pet) => statusesWith(pet, 'blocksSpecial').some((
 export const statusThorns = (pet) =>
   statusesWith(pet, 'thorns').reduce((n, { def }) => n + def.thorns, 0);
 
+/**
+ * Max SPC after any passive that resizes the die (Lovey Dovey).
+ *
+ * `maxSpcScale` is a plain field on the passive rather than a ctx hook,
+ * precisely so this stays a pure function of the pet — the HUD, the initiative
+ * roll and the charge roll all read the same number and cannot drift apart.
+ * The largest multiplier wins rather than stacking.
+ */
+export const maxSpcDie = (pet) => {
+  let mult = 1;
+  for (const passive of pet.passives) {
+    if (passive.maxSpcScale) mult = Math.max(mult, passive.maxSpcScale(pet) || 1);
+  }
+  return Math.max(1, Math.round(pet.stats.spc * mult));
+};
+
 /** How many dice to roll for Special charge, and how big, after statuses. */
 export const spcRollPlan = (pet) => {
   const dice = statusesWith(pet, 'spcDice').reduce((n, { def }) => Math.max(n, def.spcDice), 1);
   const mult = statusesWith(pet, 'spcMult').reduce((n, { def }) => n * def.spcMult, 1);
-  return { dice, size: Math.max(1, Math.floor(pet.stats.spc * mult)) };
+  return { dice, size: Math.max(1, Math.floor(maxSpcDie(pet) * mult)) };
 };
 
 /* ── DERIVED STATS ───────────────────────────────────────────────── */
@@ -195,7 +211,7 @@ export const snapshotPet = (pet) => ({
   fainted: pet.fainted,
   atkDie: attackDie(pet),
   defDie: defenseDie(pet),
-  spcDie: pet.stats.spc,
+  spcDie: maxSpcDie(pet),
   baseAtkDie: pet.stats.atk,
   baseDefDie: pet.stats.def,
   heartCounters: pet.heartCounters,

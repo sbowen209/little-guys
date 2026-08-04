@@ -179,9 +179,9 @@ export const PASSIVES = {
     id: 'scruffy_resolve',
     name: 'Scruffy',
     level: 5,
-    desc: 'Advantage on DEF rolls at 2 hearts or fewer.',
+    desc: 'Advantage on DEF rolls at 3 hearts or fewer.',
     hooks: {
-      defenseAdvantage: ({ self }) => (self.hp <= 2 ? 1 : 0),
+      defenseAdvantage: ({ self }) => (self.hp <= 3 ? 1 : 0),
     },
   },
 
@@ -282,14 +282,13 @@ export const PASSIVES = {
     name: 'Parting Charge',
     provisional: true,
     level: 5,
-    desc: 'When knocked out, bank 50 Special charge — which passes to whoever takes the field next.',
+    desc: 'When knocked out, the next ally to take the field arrives with 100 Special charge — a full meter.',
     hooks: {
-      /** A fainting pet hands its meter to its replacement, so charging up on
-       *  the way down is how this reaches the next ally. `setSpc` rather than
-       *  `gainSpc` because charge cannot be *gained* by a pet that is already
-       *  down — this is the meter it leaves behind. */
+      /** Queued onto the switch-in rather than banked on the corpse, so the
+       *  replacement gets the whole 100 instead of whatever fits under the cap
+       *  once the fallen pet's own leftover meter is added. */
       onFaint: ({ ctx, self }) => {
-        ctx.setSpc(self, self.spc + 50, 'Parting Charge');
+        ctx.queueSwitchInBonus(self.side, { spc: 100, label: 'Parting Charge' });
       },
     },
   },
@@ -299,23 +298,35 @@ export const PASSIVES = {
     id: 'lovey_dovey',
     name: 'Lovey Dovey',
     level: 1,
-    desc: 'When a bonded ally generates Special charge, gain 50% of that amount.',
-    hooks: {
-      onAllySpcGain: ({ ctx, self, ally, amount }) => {
-        if (!self.species.bond || ally.species.bond !== self.species.bond) return;
-        const share = Math.floor(amount * 0.5);
-        if (share > 0) ctx.gainSpc(self, share, 'bond');
-      },
+    desc: 'While your bonded partner is on the team, your Max SPC is 50% larger.',
+    /**
+     * Reworked. This used to hand over 50% of any charge the partner generated,
+     * which measured out as a trap: it bought more Bubble Shields on a pet that
+     * could not convert them. A bigger die is worth the same charge without
+     * needing the partner to be the one rolling, and it feeds initiative too.
+     *
+     * A pure field rather than a hook, so `combatant.js` can fold it into the
+     * derived Max SPC and the HUD can never disagree with the simulator.
+     */
+    maxSpcScale: (self) => {
+      const bond = self.species.bond;
+      if (!bond || !self.team) return 1;
+      return self.team.some((ally) => ally !== self && ally.species.bond === bond) ? 1.5 : 1;
     },
   },
   surface_tension: {
     id: 'surface_tension',
     name: 'Surface Tension',
     level: 5,
-    desc: 'When your Bubble Shield pops, recover 25 Special charge.',
+    desc: 'Once your bonded partner has been defeated, gain +20 Max ATK for the rest of the match.',
     hooks: {
-      onShieldPopped: ({ ctx, self }) => {
-        ctx.gainSpc(self, 25, 'Surface Tension');
+      /** Counted live off the roster, so it needs no death hook and cannot be
+       *  missed if the partner goes down while this pet is benched. */
+      attackFlatMod: ({ self }) => {
+        const bond = self.species.bond;
+        if (!bond || !self.team) return 0;
+        return self.team.some((ally) => ally !== self && ally.species.bond === bond && ally.fainted)
+          ? 20 : 0;
       },
     },
   },
@@ -364,10 +375,10 @@ export const PASSIVES = {
     name: 'Second Stomach',
     provisional: true,
     level: 5,
-    desc: 'At the start of your turn, a 1-in-6 chance to recover 1 heart.',
+    desc: 'At the start of your turn, a 1-in-8 chance to recover 1 heart.',
     hooks: {
       onTurnStart: ({ ctx, self }) => {
-        if (ctx.rng.die(6) === 1) ctx.heal(self, 1, { label: 'Second Stomach' });
+        if (ctx.rng.die(8) === 1) ctx.heal(self, 1, { label: 'Second Stomach' });
       },
     },
   },
@@ -518,12 +529,12 @@ export const PASSIVES = {
     id: 'spooked',
     name: 'Spooked',
     level: 1,
-    desc: 'When you take the field, the opposing pet gains 5 stacks of Disadvantage.',
+    desc: 'When you take the field, the opposing pet gains 10 stacks of Disadvantage.',
     hooks: {
       onEnterField: ({ ctx, self }) => {
         const foe = ctx.activeFoeOf(self);
         if (foe && !foe.fainted) {
-          ctx.applyStatus(foe, STATUS.DISADVANTAGE, 5, { source: self, label: 'Spooked' });
+          ctx.applyStatus(foe, STATUS.DISADVANTAGE, 10, { source: self, label: 'Spooked' });
         }
       },
     },
@@ -533,12 +544,18 @@ export const PASSIVES = {
     name: 'Stage Fright',
     provisional: true,
     level: 5,
-    desc: 'When you take the field, the opposing pet gains 99 stacks of Stunt — its Special is locked for the rest of the match.',
+    desc: 'When you take the field, the opposing pet and one random benched enemy each gain 99 stacks of Stunt — their Specials are locked for the rest of the match.',
     hooks: {
+      /** Reaching the bench as well is what stops this being spent entirely on
+       *  whichever single pet happened to be standing there. */
       onEnterField: ({ ctx, self }) => {
         const foe = ctx.activeFoeOf(self);
         if (foe && !foe.fainted) {
           ctx.applyStatus(foe, STATUS.STUNT, 99, { source: self, label: 'Stage Fright' });
+        }
+        const bench = ctx.benchedFoesOf(self);
+        if (bench.length) {
+          ctx.applyStatus(ctx.rng.pick(bench), STATUS.STUNT, 99, { source: self, label: 'Stage Fright' });
         }
       },
     },
@@ -779,17 +796,54 @@ export const PASSIVES = {
       },
     },
   },
-  virulence: {
-    id: 'virulence',
-    name: 'Virulence',
+  septic_burst: {
+    id: 'septic_burst',
+    name: 'Septic Burst',
     provisional: true,
     level: 5,
-    desc: 'Poison you inflict deals 2 damage a tick instead of 1.',
+    desc: 'When knocked out, strip every stack of Poison off the opposing pet and deal 1 damage for each one taken.',
     hooks: {
-      /** Potency is captured when the Poison lands, exactly like Hell Flames —
-       *  so a virulent stack keeps biting for 2 after the Fennec is long gone,
-       *  and the Toxic Terrain it laid down does not get stronger with it. */
-      tickPotency: ({ statusId }) => (statusId === STATUS.POISON ? 2 : 0),
+      /** Cashes the slow poison in all at once on the way down, which is what
+       *  makes laying stacks early worth doing on a 4 HP pet that will not live
+       *  to watch them tick. */
+      onFaint: ({ ctx, self }) => {
+        const foe = ctx.activeFoeOf(self);
+        if (!foe || foe.fainted) return;
+        const stacks = foe.statuses[STATUS.POISON]?.stacks ?? 0;
+        if (stacks <= 0) return;
+        ctx.expireStatus(foe, STATUS.POISON, stacks);
+        ctx.dealDamage(foe, stacks, { attacker: self, cause: 'Septic Burst' });
+      },
+    },
+  },
+
+  /* ── Decrephin (Lv.5) ─────────────────────────────────────────── */
+  last_bite: {
+    id: 'last_bite',
+    name: 'Last Bite',
+    provisional: true,
+    level: 5,
+    desc: 'When knocked out, the opposing pet takes 2 stacks of Stunned.',
+    hooks: {
+      onFaint: ({ ctx, self }) => {
+        const foe = ctx.activeFoeOf(self);
+        if (!foe || foe.fainted) return;
+        ctx.applyStatus(foe, STATUS.STUNNED, 2, { source: self, label: 'Last Bite' });
+      },
+    },
+  },
+
+  /* ── Electrephant (Lv.5) ──────────────────────────────────────── */
+  overcharge: {
+    id: 'overcharge',
+    name: 'Overcharge',
+    provisional: true,
+    level: 5,
+    desc: 'Whenever you Stun an opponent, gain 3 stacks of Energized.',
+    hooks: {
+      onStunned: ({ ctx, self }) => {
+        ctx.applyStatus(self, STATUS.ENERGIZED, 3, { source: self, label: 'Overcharge' });
+      },
     },
   },
 };

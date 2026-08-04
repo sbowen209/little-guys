@@ -1,6 +1,6 @@
 # PET BATTLER
 
-**Game Design Document v3.3 — Deterministic Autobattler**
+**Game Design Document v3.4 — Deterministic Autobattler**
 
 This document describes the game *as implemented* in `src/Pets/`. Where v2.0 of
 the design differed from what shipped, this version follows the code and calls
@@ -53,8 +53,8 @@ Any phase can end the turn early.
    - **Every benched Support** rolls its own SPC die and banks half of it (§4).
      Other benched pets generate nothing unless a passive grants it via the
      `benchCharge` hook.
-   - Any pet whose passive reacts to allied charge gains resolve now (see
-     *Lovey Dovey*). Bond shares do not chain — a share never triggers another share.
+   - Any pet whose passive reacts to allied charge gains resolve now, via the
+     `onAllySpcGain` hook. A share never triggers another share.
    - The meter caps at 100.
 4. **Paralysis check.** If `Paralyzed`, 25% chance to lose the action and end the turn.
 5. **Action.** If the meter is at 100, the pet **must** cast its Special: the meter
@@ -114,7 +114,7 @@ is what separates the Attacker role from the Affinity Attacker role.
 |---|---|---|
 | **Attacker** | Advantage vs Healer, Support, Affinity Tank. Ignores the affinity chart | — |
 | **Affinity Attacker** | Advantage vs Tank. Gains advantage *or* disadvantage from the affinity chart | — |
-| **Tank** | — | Advantage on DEF vs Attacker and Stunner |
+| **Tank** | — | Advantage on DEF vs Attacker |
 | **Affinity Tank** | — | Advantage on DEF vs Affinity Attacker and Healer |
 | **Stunner** | Every successful attack also inflicts 1 Stun Counter | — |
 | **Healer** | Every successful attack builds 1 Heart Counter. At 3, heal the lowest-health ally (bench included) 1 heart and reset | — |
@@ -156,7 +156,7 @@ fails loudly if the behaviour disappears again. **Do not remove that assertion.*
 | **Cursed** | Debuff | When you would deal damage, a flat **50% chance to null it entirely** — the number of stacks does not change the odds. Stacks are **duration**: one is lost at the end of your own turn, except a stack applied during that same turn, which is spared so a reactive application always gets a live turn |
 | **Paralyzed** | Debuff | 25% chance each turn to lose your action, checked after charge is generated. Does not expire |
 | **Stun Counter** | Debuff | At 3 counters, they convert into Stunned |
-| **Bubble Shield** | Buff | Max DEF doubled. Pops the moment you take *any* damage, leaving the attacker Damp |
+| **Bubble Shield** | Buff | Max DEF doubled. Pops the moment you take *any* damage, leaving the attacker Damp. **No ability currently grants it** — the mechanism is kept live for a future pet, the way the Healer role predated Mosstiff |
 | **Damp** | Debuff | Max DEF reduced by 5 per stack. **Two flavours:** a soaking from a popped Bubble Shield is *permanent*; the stacks Wear Down grinds onto an attacker are *washable* and rinse off the next time that attacker takes damage. The applier chooses via `washable`, and the engine tracks the washable share of the stack count separately |
 | **Stunned** | Debuff | Skip your next turn entirely, Special charge included. **Stacks** — a second Stun costs a second turn rather than being swallowed. One stack is spent per turn lost |
 | **Shed** | Buff | Max ATK increased by your Max DEF. One stack consumed per attack |
@@ -240,15 +240,15 @@ Names marked *(provisional)* are placeholders awaiting a real one; they carry
 | Pet | Special | Type | Effect |
 |---|---|---|---|
 | Hellhound (Affinity) | **Hellfire Bolt** | Attack, **200% ATK** | 1 Fire damage and inflicts Burn |
-| Hellhound (Physical) | **Rending Bite** | Attack, **200% ATK** | 2 damage and 3 stacks of Rend |
+| Hellhound (Physical) | **Rending Bite** | Attack, **200% ATK** | 1 damage and 3 stacks of Rend |
 | Emboar | **Heat Up** | Effect | Inflicts Burn on the opposing pet |
 | Terror Terrier | **Terrorize** | Attack, 200% ATK | 1 damage and 3 Stun Counters. Gains 3 stacks of Fade **whether or not the strike lands** |
-| Scruffy | **Shed** | Effect | 5 stacks of Shed (Max DEF added to Max ATK for 5 attacks) |
+| Scruffy | **Shed** | Effect | 4 stacks of Shed (Max DEF added to Max ATK for 4 attacks) |
 | Necrodoodle | **Doom Curse** | Attack, 200% ATK | 2 damage and 3 stacks of Cursed |
 | Gnollbacabra | **Sunder** | Effect | Permanently strips `1d3 × 10` Max ATK. If the target's Max ATK reaches 0 they are destroyed outright |
 | Famine Wolf | **Ravenous Bite** | Attack, 200% ATK | 2 damage, then immediately regain 50 charge |
 | Felightning | **Static Shock** | Attack, **400% ATK** | 2 damage and inflicts Paralyzed |
-| Bubble Trouble (both) | **Bubble Shield** | Effect | Doubles Max DEF until you take damage; the attacker who pops it is left Damp |
+| Bubble Trouble (both) | **Bubble Shield** | Effect | 3 stacks of Damp on the opposing pet — 15 Max DEF, permanently |
 | Cerberus | **Twin Fangs** *(provisional)* | Attack, 200% ATK | 2 damage and 3 stacks of Advantage |
 | Milk Truck | **Milk** | Effect | Washes off every debuff and grants +10 Max ATK permanently |
 | Balto | **Sled Charge** *(provisional)* | Attack, 200% ATK | 1 damage, then a benched enemy is dragged onto the field and takes 1 damage too |
@@ -256,7 +256,7 @@ Names marked *(provisional)* are placeholders awaiting a real one; they carry
 | Quillbacabra | **Quill Guard** *(provisional)* | Effect | 2 stacks of Zaptap |
 | Punchadillo | **Haymaker** *(provisional)* | Attack, 200% ATK | 1 damage and 1 Stun Counter on **every** enemy, bench included — the active one also takes the Stunner role's counter, so it gets 2 |
 | Mosstiff | **Verdant Bloom** *(provisional)* | Effect | A random benched ally gains 1 heart, which **can exceed its Max HP** |
-| Bellybummer | **Lifesteal** | Attack, **300% ATK** | 1 damage healed back to you, then roll SPC and siphon that much charge off the target |
+| Bellybummer | **Lifesteal** | Attack, **300% ATK** | 1 damage healed back to you, then siphon your whole Max SPC in charge off the target |
 | Mega Chicken | **Talon Flurry** *(provisional)* | Attack, 200% ATK | 2 damage and 2 stacks of Bleed |
 | Thunder Lion | **Thunderstorm** | Effect | 2 Stun Counters on the opposing pet, and 1 stack of Zaptap for you |
 | Bone Boar | **Bone Gore** | Attack, 200% ATK | 2 damage, or 3 against a Tank or Affinity Tank |
@@ -265,7 +265,7 @@ Names marked *(provisional)* are placeholders awaiting a real one; they carry
 | Decrephin | **Sonic Boom** | Effect | Stuns a random benched enemy outright; with the bench empty it hits the active one |
 | Slicer | **Sever** *(provisional)* | Attack, 200% ATK | 2 damage — and if it finishes the target, the next enemy in arrives with 2 stacks of Sliced |
 | Electrephant | **Static Charge** *(provisional)* | Effect | 1 stack of Zaptap and +5 Max ATK permanently |
-| Swamp Fennec | **Toxic Spray** *(provisional)* | Effect | 1 Poison on a random benched enemy; with the bench empty it lands on the active one |
+| Swamp Fennec | **Toxic Spray** *(provisional)* | Effect | 1 Poison on the opposing pet and on a random benched enemy; with the bench empty the active one takes both |
 
 **Shell Slam is the only Special that rolls off a stat other than ATK.** The
 `atkFromDef` field swaps the basis to Max DEF, which is what lets a `d20`
@@ -311,29 +311,29 @@ Every pet has a passive at Level 1 and a second at Level 5.
 | Hellhound (Physical) | **Intimidating** — advantage **and +1 damage** against enemies at full health | **Relentless** — advantage against enemies at 2 hearts or fewer |
 | Emboar | **Flame Aura** — 25% chance to Burn anyone who damages you with an attack | **Afterburn** — Burn the opposing pet when you are knocked out |
 | Terror Terrier | **Ghostly Blur** — gain 1 Fade after taking damage | **Capitalize** — when you Stun someone they take 1 damage and lose 50 charge |
-| Scruffy | **Thick Fur** — immune to debuffs | **Scruffy** — advantage on DEF at 2 hearts or fewer |
+| Scruffy | **Thick Fur** — immune to debuffs | **Scruffy** — advantage on DEF at 3 hearts or fewer |
 | Necrodoodle | **Hex Claws** — successful attacks have a 25% chance to inflict Cursed | **Vengeful Curse** — 25% chance to Curse anyone who damages you |
 | Gnollbacabra | **Crippling Bite** — after damaging a target, their next attack rolls at −`1d6 × 10` Max ATK | **Bonecrusher** — anyone who damages you loses `1d2 × 10` Max DEF until their next turn |
 | Famine Wolf | **Crunch** — 25% chance to deal 1 extra damage | **Famine Feast** — after a knockout, gain +40 Max ATK permanently |
-| Felightning | **Get Away** — when knocked out, Paralyze a random benched enemy | **Parting Charge** *(prov.)* — when knocked out, bank 50 charge, which passes to your replacement |
-| Bubble Trouble (both) | **Lovey Dovey** — gain 50% of any charge a bonded ally generates | **Surface Tension** — recover 25 charge when your Bubble Shield pops |
+| Felightning | **Get Away** — when knocked out, Paralyze a random benched enemy | **Parting Charge** *(prov.)* — when knocked out, the next ally in arrives with a full 100 charge |
+| Bubble Trouble (both) | **Lovey Dovey** — Max SPC is 50% larger while your bonded partner is on the team | **Surface Tension** — +20 Max ATK once your bonded partner has been defeated |
 | Cerberus | **Twin Bite** — after an attack is blocked, gain 1 Advantage | **Press the Advantage** *(prov.)* — attacking with net Advantage, 50% chance of +1 damage |
-| Milk Truck | **Milk Shake** — gain 1 Energized when damaged | **Second Stomach** *(prov.)* — 1-in-6 chance to recover 1 heart at the start of your turn |
+| Milk Truck | **Milk Shake** — gain 1 Energized when damaged | **Second Stomach** *(prov.)* — 1-in-8 chance to recover 1 heart at the start of your turn |
 | Balto | **First Light** *(prov.)* — **double Max ATK** and advantage on any roll during either pet's first turn on the field | **Fresh Legs** *(prov.)* — gain 1 Powerful when you start the match or enter from the bench |
 | Watthog | **Chain Lightning** — dealing damage has a 1/6 chance to arc 1 damage to a benched enemy | **Supercharge** — gain 15 charge whenever you are damaged |
 | Quillbacabra | **Bristleback** *(prov.)* — 25% chance to deal 1 back when damaged | **Parting Quills** *(prov.)* — when knocked out, the killer takes 1 damage plus 1 per Zaptap stack you held |
 | Punchadillo | **Concussive Blast** *(prov.)* — landing a third Stun Counter on the active enemy gives every benched enemy 1 Stun Counter | **Rolling Guard** *(prov.)* — landing a third Stun Counter grants 2 Fade |
 | Mosstiff | **Photosynthesis** *(prov.)* — 25% chance to gain a Heart Counter at the start of your turn, without attacking | **Last Bloom** *(prov.)* — when knocked out, the next ally to enter gains 1 heart, which can exceed its Max HP |
-| Bellybummer | **Spooked** — when you take the field, the opposing pet gains 5 Disadvantage | **Stage Fright** *(prov.)* — when you take the field, the opposing pet gains **99** Stunt, locking its Special for the match |
+| Bellybummer | **Spooked** — when you take the field, the opposing pet gains 10 Disadvantage | **Stage Fright** *(prov.)* — when you take the field, the opposing pet **and one benched enemy** each gain 99 Stunt |
 | Mega Chicken | **Raking Spurs** *(prov.)* — successful attacks have a 50% chance to inflict Bleed | **Death Throes** *(prov.)* — when knocked out, the opposing pet gains 1 Rend |
 | Thunder Lion | **Electrofang** — successful attacks have a 1/6 chance to Paralyze | **Electrocyclone** — 1/6 chance to gain 1 Zaptap when damaged |
 | Bone Boar | **Bone Harvest** *(prov.)* — gain 1 Bone Shield when you deal damage | **Ossuary Guard** *(prov.)* — take the field with 3 Bone Shield already up |
 | Wild Cat | **Ambush Instinct** *(prov.)* — advantage against enemies whose Special meter is at least half full | **Scent of Blood** *(prov.)* — +5 Max ATK per pet already defeated on the enemy team |
 | Dragon Turtle | **Wear Down** — an attack that fails against you leaves the attacker *washable* Damp | **Impenetrable** — Attacker-role units roll at 10 less Max ATK against you |
-| Decrephin | **Dolphangs** — at 2 hearts or fewer, every successful attack inflicts Bleed | *(unwritten)* |
+| Decrephin | **Dolphangs** — at 2 hearts or fewer, every successful attack inflicts Bleed | **Last Bite** *(prov.)* — when knocked out, the opposing pet takes 2 stacks of Stunned |
 | Slicer | **Wristblades** — successful attacks have a 25% chance to inflict 1 Sliced | **Open Wounds** *(prov.)* — advantage against an enemy already carrying Sliced |
-| Electrephant | **First Impression** *(prov.)* — the first hit on any given enemy adds 2 extra Stun Counters, three with the role's own | *(unwritten)* |
-| Swamp Fennec | **Toxic Terrain** *(Legendary)* + **Venom Blood** *(prov.)* — the arena turns toxic on entry; immune to Poison, 25% to Poison the foe when damaged | **Virulence** *(prov.)* — Poison you inflict bites for 2 a tick instead of 1 |
+| Electrephant | **First Impression** *(prov.)* — the first hit on any given enemy adds 2 extra Stun Counters, three with the role's own | **Overcharge** *(prov.)* — gain 3 Energized whenever you Stun someone |
+| Swamp Fennec | **Toxic Terrain** *(Legendary)* + **Venom Blood** *(prov.)* — the arena turns toxic on entry; immune to Poison, 25% to Poison the foe when damaged | **Septic Burst** *(prov.)* — when knocked out, strip every Poison stack off the opposing pet and deal 1 damage each |
 
 **Bonding** is a species tag rather than a hard-coded pairing: both Bubble
 Troubles carry `bond: 'bubble'`, and *Lovey Dovey* fires for any ally sharing
@@ -447,6 +447,11 @@ opponent AI to tune or to argue with.
   **with no pet in two squads**. Pets may be left out entirely.
 - Player 2 then picks that many saved rosters, **in order** — their first pick
   faces Squad 1, and the fixture list is shown before anyone commits.
+- **Lineup order inside a squad is editable.** Squads are stored as ordered lists
+  of ids rather than a pet-to-squad map, precisely so the order is state the
+  player owns; arrows on each row move a pet up or down, and slot 1 is the Lead.
+  It used to be an accident of the order you happened to click in. The decider
+  draft has the same controls, since pick order sets that lineup too.
 - **1 squad** — a single match settles it.
 - **2 squads** — two matches. A **1-1 split forces a decider**: each side drafts
   a third squad from the pets across *its own two squads*, player 1 first and
@@ -516,6 +521,14 @@ the entire lower two-thirds of the frame clear for the fight.
   is burning never pulls your eye off the action.
 - **The bench carries no HUD at all.** Who enters next is communicated by
   staging: closest to the fight, largest, brightest, with the rest queued behind.
+- **The kit card sits in the top outer corner** — role, both typings, and the
+  pet's passives, with a hover card carrying each passive's full text. It lives
+  up there, in the fighting-game position, because *none of it changes during a
+  match*: the flank carries what is changing, the outboard rail carries the live
+  dice, and this carries what you learn once and then want to re-check without
+  pausing. The offensive typing is deliberately dimmed on every role except the
+  Affinity Attacker, because that is the only role that reads the chart on
+  offence — showing it bright on a Tank would imply a rule that does not exist.
 
 ### The dice
 
@@ -707,7 +720,7 @@ node src/Pets/engine/balance.mjs 2000 5      # level 5 — every second passive 
 ```
 
 Reports average and longest match length, draw rate, a solo win-rate table for
-every species, a **5v5 roster contribution table**, and **45 rule assertions**.
+every species, a **5v5 roster contribution table**, and **47 rule assertions**.
 Run it at both levels: several rules
 only exist once the Lv.5 passives are live, and a pet can be fine at one level
 and broken at the other.
@@ -725,7 +738,79 @@ run go green.**
 
 ---
 
-## 15. CHANGES IN v3.3
+## 15. CHANGES IN v3.4
+
+A balance pass from the Edits sheet of the pet workbook, plus the role change
+that pass was written around.
+
+### Neither Tank walls a Stunner
+
+`DEFENSE_ROLE_ADVANTAGE[TANK]` drops `STUNNER`. A Tank used to roll defensive
+advantage against Attackers **and** Stunners — 14 of 28 species — while an
+Affinity Tank answered 5. That made the two look like different *qualities* of
+role rather than different flavours of one, and it was the single largest reason
+Bubble Trouble (Affinity) sat 4 points below its twin. Each Tank now walls
+exactly the attacker it was built for, and Stunners get to do their job to
+everybody. Guarded by *"No Tank rolls DEF advantage against a Stunner"*.
+
+### Bubble Trouble, reworked end to end
+
+The pair tested as a **trap** in the v3.3 balance report: fielding both was worse
+than fielding either alone, because the bond bought more Bubble Shields and
+Bubble Shield was pure defence on a pet with a d23 attack. All three pieces
+changed.
+
+| | Was | Now |
+|---|---|---|
+| **Lovey Dovey** | Gain 50% of any charge a bonded ally generates | **Max SPC is 50% larger while your bonded partner is on the team** |
+| **Bubble Shield** | Doubles your Max DEF until you take damage | **3 stacks of Damp on the opposing pet** — 15 Max DEF, permanently |
+| **Surface Tension** | Recover 25 charge when your shield pops | **+20 Max ATK once your bonded partner has been defeated** |
+
+Lovey Dovey is now a **pure field** on the passive (`maxSpcScale`) rather than a
+hook, so `combatant.js` folds it into a derived Max SPC that the charge roll, the
+initiative roll and the HUD all read from. That is also why each combatant now
+carries a `team` handle: it is what lets a passive read its roster from a pure
+function without dragging `ctx` into the derived-stat pipeline.
+
+**Bubble Shield the *status* is now unreferenced.** The engine support stays —
+it is general, and the Healer role sat unused for a whole release before Mosstiff
+arrived.
+
+### Everything else from the Edits sheet
+
+| Pet | Change |
+|---|---|
+| **Scruffy** | HP **7 → 5** · Shed 5 → **4** attacks · Lv.5 advantage at **3** hearts, up from 2 |
+| **Hellhound (Physical)** | Rending Bite 2 → **1** damage |
+| **Milk Truck** | Second Stomach 1/6 → **1/8** |
+| **Bellybummer** | Spooked 5 → **10** Disadvantage · Stage Fright also hits **a benched enemy** · Lifesteal siphons **Max SPC flat** instead of a roll of it |
+| **Felightning** | Parting Charge → the next ally in arrives with a **full 100** charge |
+| **Swamp Fennec** | Toxic Spray hits **the active pet and a benched one** · Lv.5 Virulence replaced by **Septic Burst** — on death, strip every Poison stack off the opposing pet and deal 1 damage each |
+| **Decrephin** | Lv.5 **Last Bite** — on death, 2 stacks of Stunned on the opposing pet |
+| **Electrephant** | Lv.5 **Overcharge** — 3 Energized whenever you Stun someone |
+
+Virulence was the only user of `tickPotency`. The hook and its assertion stay,
+because the machinery is live and the next pet to want it should not have to
+rediscover whether it works.
+
+### What it did to the spread
+
+Scruffy **69.9% → 61.4%** and now leads by 2 points instead of 11. The whole
+roster compressed from a 30-point spread to 21. Stunners were the big winners of
+the role change — Electrephant 47.9 → 54.5, Terror Terrier 52.8 → 56.9,
+Punchadillo 49.5 → 52.8 — and the bottom of the table changed hands: the pets
+that now need attention are **Gnollbacabra (40.1)** and **Felightning (40.2)**,
+both 4 HP and both exactly what a newly unwalled Stunner farms.
+
+### Two new assertions
+
+*No Tank rolls DEF advantage against a Stunner* (checked against real rolls, not
+just the table) and *Lovey Dovey grows Max SPC only with the partner present*.
+**47 total.**
+
+---
+
+## 15a. CHANGES IN v3.3
 
 ### Fourth wave
 
@@ -831,7 +916,7 @@ Stunned stacking · First Impression firing once per enemy.
 
 ---
 
-## 15a. CHANGES IN v3.2
+## 15b. CHANGES IN v3.2
 
 ### Third wave
 
@@ -848,7 +933,7 @@ status (Bone Shield), a Special that rolls off Max DEF, and the hooks
 
 ---
 
-## 15b. CHANGES IN v3.1
+## 15c. CHANGES IN v3.1
 
 ### The roster doubled
 
@@ -907,21 +992,21 @@ retune a Support or Healer off the solo table.**
 Conversely, Necrodoodle reads 59.6% solo and 48.3% in a roster: a strong duellist
 that contributes less to a team.
 
-### Open questions at v3.1
+### Open questions at v3.4
 
-Flagged rather than silently fixed, because they are design calls:
+Flagged rather than silently fixed, because they are design calls. Rewritten for
+v3.4 — items 1 and 2 of the old list are now closed.
 
-1. **Scruffy leads both tables** (72.8% solo, 69.0% roster — eight points clear
-   of second). Making Rend permanent and halving Damp were nerfs to everything
-   *except* the one pet whose Thick Fur ignores both, so tightening debuffs
-   buffs Scruffy every time. Watch this whenever a debuff is strengthened.
-2. **Bellybummer is last at 33.6%** even in a roster, despite 5 stacks each of
-   Disadvantage and Stunt. Both fire only on entry, so a lead Bellybummer spends
-   them on one pet and has nothing afterwards. It may want an effect that
-   recurs.
-3. **Hellhound (Physical) at 71.1% solo.** *Intimidating* now doubles the damage
-   of every opening attack against a fresh pet, which is worth more in a duel
-   than in a roster (53.9%).
+1. **Gnollbacabra (40.1%) and Felightning (40.2%) are the new bottom.** Both are
+   4 HP, and both got relatively worse when Stunners stopped being walled by
+   Tanks. Neither was touched by this pass; they are simply what a freed-up
+   Stunner farms.
+2. **Bubble Trouble (Affinity) is still the weaker twin.** The role change closed
+   most of the structural gap and the rework gave the pair a win condition, but a
+   d20 attack is a low ceiling. Worth re-measuring before touching it again.
+3. **Scruffy is fixed but still first** (61.4%, +2 on second). The Thick Fur
+   interaction has not gone away: it is still the one pet that ignores every new
+   debuff, so **watch it whenever a debuff is strengthened.**
 4. **Heat Up is still weak for a 100-charge Special** — "inflict one Burn" is
    roughly 1/6 × 2 damage per following turn. Emboar tests fine because *Flame
    Aura* carries it, but the Special is not a payoff.

@@ -778,3 +778,78 @@
     transition-duration: 60ms !important;
   }
 }
+
+/* ── KIT CARD ─────────────────────────────────────────────────────
+   Role, typings and passives for whoever is on the field. Sits in the top
+   outer corners — the fighting-game position — because none of it changes
+   during a match and it must not compete with the duel downstage. Same
+   translucent dark plate as the turn counter and the dice rail, so the HUD
+   reads as one family. */
+.pb-kit {
+  position: absolute; top: 104px; width: 224px;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px 11px; border-radius: 14px;
+  background: rgba(30, 21, 8, 0.52);
+  z-index: 30;
+}
+.pb-kit--p1 { left: 20px; }
+.pb-kit--p2 { left: 1356px; }
+
+.pb-kit__role {
+  font-family: ui-monospace, monospace; font-size: 11px; font-weight: 900;
+  letter-spacing: 0.14em; text-transform: uppercase; line-height: 1;
+  text-shadow: 0 1px 4px rgba(20, 13, 4, 0.85);
+}
+
+.pb-kit__types { display: flex; flex-direction: column; gap: 3px; }
+.pb-kit__type { display: flex; align-items: baseline; gap: 7px; }
+.pb-kit__typeicon {
+  font-family: ui-monospace, monospace; font-size: 8.5px; font-weight: 700;
+  letter-spacing: 0.1em; color: rgba(255, 253, 246, 0.5); min-width: 24px;
+}
+.pb-kit__typename {
+  font-family: ui-monospace, monospace; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.04em; color: #fffdf6;
+  text-shadow: 0 1px 3px rgba(20, 13, 4, 0.8);
+}
+/* Inert on the chart: still stated, but visibly not in play. */
+.pb-kit__type.is-inert .pb-kit__typename { color: rgba(255, 253, 246, 0.4); }
+
+.pb-kit__passives {
+  list-style: none; margin: 0; padding: 5px 0 0;
+  display: flex; flex-direction: column; gap: 4px;
+  border-top: 1px solid rgba(255, 253, 246, 0.14);
+}
+.pb-kit__passive { position: relative; display: flex; align-items: center; gap: 6px; }
+.pb-kit__mark { font-size: 9px; line-height: 1; opacity: 0.75; }
+.pb-kit__pname {
+  font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
+  color: #fffdf6; letter-spacing: 0.02em;
+  text-shadow: 0 1px 3px rgba(20, 13, 4, 0.8);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pb-kit__passive.is-locked .pb-kit__pname { color: rgba(255, 253, 246, 0.38); }
+.pb-kit__passive.is-legendary .pb-kit__pname { color: #f0abfc; }
+
+/* Hover card, mirrored so it always opens toward the middle of the arena. */
+.pb-kit__tip {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 232px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(255, 252, 244, 0.97);
+  box-shadow: 0 8px 22px rgba(70, 52, 26, 0.34);
+  display: flex; flex-direction: column; gap: 3px;
+  opacity: 0; pointer-events: none; transition: opacity 130ms ease;
+  z-index: 60;
+}
+.pb-kit--p1 .pb-kit__tip { left: calc(100% + 12px); }
+.pb-kit--p2 .pb-kit__tip { right: calc(100% + 12px); }
+.pb-kit__passive:hover .pb-kit__tip { opacity: 1; }
+.pb-kit__tipname {
+  font-family: ui-monospace, monospace; font-size: 10px; font-weight: 900;
+  letter-spacing: 0.08em; text-transform: uppercase; color: #4a3a1c;
+}
+.pb-kit__tipdesc { font-size: 11px; line-height: 1.4; color: #7a6842; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-kit__tip { transition: none; }
+}

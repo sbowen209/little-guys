@@ -13,7 +13,7 @@ import { createRng, randomSeed } from './rng.js';
 import {
   createCombatant, snapshotPet, stacksOf, hasStatus, addStacks, removeStacks,
   blocksStatus, immunityLabel, attackDie, defenseDie, rawAttackDie,
-  statusesWith, statusDamageFloor, specialBlocked, statusThorns, spcRollPlan,
+  statusesWith, statusDamageFloor, specialBlocked, statusThorns, spcRollPlan, maxSpcDie,
 } from './combatant.js';
 import { EV } from './events.js';
 import {
@@ -33,6 +33,11 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
   if (!sides[0].length || !sides[1].length) {
     throw new Error('Both teams need at least one pet.');
   }
+
+  // Each pet gets a handle on its own side's roster. That is what lets a passive
+  // read its team from a *pure* function (Lovey Dovey's Max SPC, Surface
+  // Tension's fallen partner) without the derived-stat pipeline needing ctx.
+  for (const side of sides) for (const pet of side) pet.team = side;
 
   const lead = [0, 0];
   const timeline = [];
@@ -367,6 +372,8 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
     gainSpc,
     setSpc,
     rawAttackDie,
+    /** Max SPC after passives — what Lifesteal siphons. */
+    maxSpc: maxSpcDie,
     activeFoeOf: (pet) => active(otherSide(pet.side)),
     alliesOf: (pet) => sides[pet.side].filter((p) => p !== pet && !p.fainted),
     /** The opposing team's bench — anything that reaches past the active pet. */
@@ -703,7 +710,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       if (fromPassive > 0) gainSpc(benched, fromPassive, 'passive');
 
       if (benched.species.role === ROLE.SUPPORT) {
-        const banked = Math.floor(rng.die(benched.stats.spc) * RULES.SUPPORT_BENCH_SHARE);
+        const banked = Math.floor(rng.die(maxSpcDie(benched)) * RULES.SUPPORT_BENCH_SHARE);
         if (banked > 0) gainSpc(benched, banked, 'role');
       }
     }
@@ -874,12 +881,14 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
   const resolveInitiative = (reason) => {
     const p1 = active(0);
     const p2 = active(1);
-    const tie = p1.stats.spc === p2.stats.spc;
-    const winner = tie ? (rng.coin() ? 0 : 1) : p1.stats.spc > p2.stats.spc ? 0 : 1;
+    const spc1 = maxSpcDie(p1);
+    const spc2 = maxSpcDie(p2);
+    const tie = spc1 === spc2;
+    const winner = tie ? (rng.coin() ? 0 : 1) : spc1 > spc2 ? 0 : 1;
 
     emit(EV.INITIATIVE, {
       side: winner, reason, tie,
-      spc: [p1.stats.spc, p2.stats.spc],
+      spc: [spc1, spc2],
       names: [p1.name, p2.name],
     });
     return winner;
@@ -975,7 +984,7 @@ export function simulateBattle({ team1, team2, seed = randomSeed() }) {
       priorityOverride = null;
       emit(EV.INITIATIVE, {
         side: turnSide, reason: 'avenge', tie: false,
-        spc: [active(0).stats.spc, active(1).stats.spc],
+        spc: [maxSpcDie(active(0)), maxSpcDie(active(1))],
         names: [active(0).name, active(1).name],
       });
     } else {

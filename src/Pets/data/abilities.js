@@ -43,10 +43,10 @@ export const ABILITIES = {
     kind: 'attack',
     cost: 100,
     atkScale: 2,
-    damage: 2,
+    damage: 1,
     element: ELEMENT.PHYSICAL,
     vfx: 'rend_slash',
-    desc: 'Rolls at 200% Max ATK. On a hit: 2 damage and 3 stacks of Rend.',
+    desc: 'Rolls at 200% Max ATK. On a hit: 1 damage and 3 stacks of Rend.',
     applyToTarget: [{ status: STATUS.REND, stacks: 3 }],
   },
 
@@ -84,8 +84,8 @@ export const ABILITIES = {
     cost: 100,
     element: ELEMENT.EARTH,
     vfx: 'bulwark',
-    desc: 'For the next 5 attacks, add your Max DEF to your Max ATK.',
-    applyToSelf: [{ status: STATUS.SHED, stacks: 5 }],
+    desc: 'For the next 4 attacks, add your Max DEF to your Max ATK.',
+    applyToSelf: [{ status: STATUS.SHED, stacks: 4 }],
   },
 
   doom_curse: {
@@ -156,8 +156,14 @@ export const ABILITIES = {
     cost: 100,
     element: ELEMENT.WATER,
     vfx: 'bubble',
-    desc: 'Doubles your Max DEF until you take damage. When it pops, the attacker is left Damp.',
-    applyToSelf: [{ status: STATUS.BUBBLE_SHIELD, stacks: 1 }],
+    /**
+     * Reworked: this used to double the caster's own Max DEF until it popped.
+     * It now bursts outward instead — the bubbles finally have a way to convert
+     * a full meter into pressure rather than into more of their own defence.
+     * The Damp is the permanent flavour, not Wear Down's washable kind.
+     */
+    desc: 'Bursts over the opposing pet, leaving 3 stacks of Damp — 15 Max DEF, permanently.',
+    applyToTarget: [{ status: STATUS.DAMP, stacks: 3 }],
   },
 
   /* ══ SECOND WAVE ═══════════════════════════════════════════════════
@@ -291,10 +297,11 @@ export const ABILITIES = {
     element: ELEMENT.SHADOW,
     vfx: 'hex',
     lifesteal: true,
-    desc: 'Rolls at 300% Max ATK. On a hit: 1 damage healed back to you, then roll your Special die and siphon that much charge off the target.',
+    desc: 'Rolls at 300% Max ATK. On a hit: 1 damage healed back to you, then siphon your whole Max SPC in charge off the target — or as much as they are holding.',
     onResolve: ({ ctx, self, target, hit }) => {
       if (!hit || !target || target.fainted) return;
-      const stolen = Math.min(ctx.rng.die(self.stats.spc), target.spc);
+      // Max SPC flat, not a roll of it: the siphon is reliable now.
+      const stolen = Math.min(ctx.maxSpc(self), target.spc);
       if (stolen <= 0) return;
       ctx.setSpc(target, target.spc - stolen, 'Lifesteal');
       ctx.gainSpc(self, stolen, 'Lifesteal');
@@ -437,9 +444,11 @@ export const ABILITIES = {
     cost: 100,
     element: ELEMENT.EARTH,
     vfx: 'flare',
-    desc: 'A random benched enemy gains 1 stack of Poison. With the bench empty it lands on the pet in front instead.',
+    desc: 'The opposing pet and one random benched enemy each gain 1 stack of Poison. With the bench empty, the pet in front takes both.',
+    applyToTarget: [{ status: STATUS.POISON, stacks: 1 }],
     onResolve: ({ ctx, self, target }) => {
       const bench = ctx.benchedFoesOf(self);
+      // Nowhere to spread to means the spray concentrates on the pet in front.
       const victim = bench.length ? ctx.rng.pick(bench) : target;
       if (!victim || victim.fainted) return;
       ctx.applyStatus(victim, STATUS.POISON, 1, { source: self, label: 'Toxic Spray' });

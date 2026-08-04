@@ -15,6 +15,10 @@ import { GAUNTLET_FORMATS, deciderPool } from '../engine/gauntlet.js';
 import { SETUP_STYLES } from './SetupParts.jsx';
 import { assetUrl } from '../../utils/assets.js';
 
+/** Squad lists are always allocated for the largest format, so dropping from
+ *  3v3 to 2v2 and back does not lose a lineup the player already arranged. */
+const MAX_SQUADS = Math.max(...GAUNTLET_FORMATS);
+
 /* ── SHARED PIECES ───────────────────────────────────────────────── */
 
 const Shell = ({ children }) => (
@@ -25,6 +29,34 @@ const Shell = ({ children }) => (
     <style dangerouslySetInnerHTML={{ __html: SETUP_STYLES }} />
   </div>
 );
+
+/**
+ * A nudge control for lineup order. Stops the click reaching the squad card
+ * behind it, which would otherwise just re-select the squad.
+ */
+function SlotButton({ label, glyph, disabled, onClick }) {
+  return (
+    <span
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-label={label}
+      aria-disabled={disabled}
+      title={label}
+      onClick={(event) => { event.stopPropagation(); if (!disabled) onClick(); }}
+      onKeyDown={(event) => {
+        if (disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault(); event.stopPropagation(); onClick();
+      }}
+      className={`flex h-3.5 w-5 items-center justify-center rounded text-[7px] leading-none transition-colors ${
+        disabled
+          ? 'cursor-default text-stone-800'
+          : 'cursor-pointer text-stone-500 hover:bg-emerald-500/20 hover:text-emerald-300'
+      }`}
+    >
+      {glyph}
+    </span>
+  );
+}
 
 /**
  * One stable pet. Compact enough that all eight fit on screen at once, which is
@@ -85,8 +117,8 @@ function StablePet({ pet, assignment, onClick, dimmed, order }) {
 
 export function GauntletSetupView({ onBack, onBegin, savedTeams, onBuild }) {
   const [format, setFormat] = useState(2);
-  /** instanceId -> team index. Absent means benched for this gauntlet. */
-  const [assigned, setAssigned] = useState({});
+  /** One ordered list of instanceIds per squad. Index 0 of a list is its Lead. */
+  const [squads, setSquads] = useState(() => Array.from({ length: MAX_SQUADS }, () => []));
   const [activeTeam, setActiveTeam] = useState(0);
   /** 'divide' — player 1 splits the stable · 'rivals' — player 2 answers. */
   const [stage, setStage] = useState('divide');
@@ -109,47 +141,67 @@ export function GauntletSetupView({ onBack, onBegin, savedTeams, onBuild }) {
     [],
   );
 
-  const teams = useMemo(() => {
-    const built = Array.from({ length: format }, () => []);
-    for (const pet of stable) {
-      const index = assigned[pet.instanceId];
-      if (index !== undefined && index < format) built[index].push(pet);
-    }
-    return built;
-  }, [assigned, format, stable]);
+  const byId = useMemo(
+    () => Object.fromEntries(stable.map((pet) => [pet.instanceId, pet])),
+    [stable],
+  );
 
-  const orderIn = useCallback((pet) => {
-    const index = assigned[pet.instanceId];
-    if (index === undefined || index >= format) return -1;
-    return teams[index].findIndex((p) => p.instanceId === pet.instanceId);
-  }, [assigned, format, teams]);
+  /**
+   * Squads are lists of ids, not a pet-to-squad map, precisely so the order
+   * inside each one is state the player can edit. Lineup order decides who
+   * leads and who follows, and it used to be an accident of click order.
+   */
+  const teams = useMemo(
+    () => squads.slice(0, format).map((ids) => ids.map((id) => byId[id]).filter(Boolean)),
+    [squads, format, byId],
+  );
 
-  /** Click cycles a pet into the active team, or off it if it is already there. */
+  const squadOf = useCallback((pet) => {
+    const index = squads.findIndex((ids) => ids.includes(pet.instanceId));
+    return index >= 0 && index < format ? index : null;
+  }, [squads, format]);
+
+  const orderIn = useCallback(
+    (pet) => (squads[squadOf(pet)] ?? []).indexOf(pet.instanceId),
+    [squads, squadOf],
+  );
+
+  /** Click drops a pet into the active squad, or pulls it back out. */
   const toggle = useCallback((pet) => {
-    setAssigned((previous) => {
-      const next = { ...previous };
-      if (next[pet.instanceId] === activeTeam) delete next[pet.instanceId];
-      else next[pet.instanceId] = activeTeam;
+    setSquads((previous) => {
+      const next = previous.map((ids) => ids.filter((id) => id !== pet.instanceId));
+      const wasHere = previous[activeTeam]?.includes(pet.instanceId);
+      if (!wasHere) next[activeTeam] = [...next[activeTeam], pet.instanceId];
       return next;
     });
   }, [activeTeam]);
 
+  /** Slides a pet up or down its own squad's lineup. */
+  const move = useCallback((teamIndex, from, delta) => {
+    setSquads((previous) => {
+      const ids = [...previous[teamIndex]];
+      const to = from + delta;
+      if (to < 0 || to >= ids.length) return previous;
+      [ids[from], ids[to]] = [ids[to], ids[from]];
+      const next = [...previous];
+      next[teamIndex] = ids;
+      return next;
+    });
+  }, []);
+
   const clearTeam = useCallback((index) => {
-    setAssigned((previous) => Object.fromEntries(
-      Object.entries(previous).filter(([, value]) => value !== index),
-    ));
+    setSquads((previous) => previous.map((ids, i) => (i === index ? [] : ids)));
   }, []);
 
   /** Spreads the stable round-robin so a first-time player can just hit go. */
   const autoAssign = useCallback(() => {
     const shuffled = [...stable].sort(() => Math.random() - 0.5);
-    const next = {};
+    const next = Array.from({ length: MAX_SQUADS }, () => []);
     shuffled.forEach((pet, i) => {
       const team = i % format;
-      const sizeSoFar = Object.values(next).filter((t) => t === team).length;
-      if (sizeSoFar < RULES.TEAM_SIZE) next[pet.instanceId] = team;
+      if (next[team].length < RULES.TEAM_SIZE) next[team].push(pet.instanceId);
     });
-    setAssigned(next);
+    setSquads(next);
   }, [format, stable]);
 
   const overSized = teams.some((team) => team.length > RULES.TEAM_SIZE);
@@ -381,12 +433,12 @@ export function GauntletSetupView({ onBack, onBegin, savedTeams, onBuild }) {
             </h2>
             <p className="font-mono text-[10px] leading-relaxed text-stone-600">
               Click a pet to add it to <span className="text-emerald-400">Squad {activeTeam + 1}</span>,
-              or click it again to pull it back out.
+              or click it again to pull it back out. Use the arrows in a squad to set
+              who leads.
             </p>
             <div className="flex flex-col gap-2">
               {stable.map((pet) => {
-                const index = assigned[pet.instanceId];
-                const on = index !== undefined && index < format ? index : null;
+                const on = squadOf(pet);
                 return (
                   <StablePet
                     key={pet.instanceId}
@@ -443,8 +495,23 @@ export function GauntletSetupView({ onBack, onBegin, savedTeams, onBuild }) {
                               {slot === 0 ? 'Lead' : `#${slot + 1}`}
                             </span>
                             <img src={assetUrl(species.art)} alt="" className="h-7 w-7 shrink-0 object-contain" />
-                            <span className="truncate font-serif text-xs font-bold text-stone-200">
+                            <span className="min-w-0 flex-1 truncate font-serif text-xs font-bold text-stone-200">
                               {displayName(species)}
+                            </span>
+                            {/* Lineup order decides who leads, so it has to be editable. */}
+                            <span className="flex shrink-0 flex-col">
+                              <SlotButton
+                                label="Move up"
+                                glyph="▲"
+                                disabled={slot === 0}
+                                onClick={() => move(index, slot, -1)}
+                              />
+                              <SlotButton
+                                label="Move down"
+                                glyph="▼"
+                                disabled={slot === pets.length - 1}
+                                onClick={() => move(index, slot, 1)}
+                              />
                             </span>
                           </li>
                         );
@@ -516,6 +583,17 @@ export function DeciderDraftView({ series, side, onConfirm }) {
     ));
   };
 
+  /** Pick order sets the lineup, so it has to be editable after the fact. */
+  const reorder = (from, delta) => {
+    setPicked((previous) => {
+      const to = from + delta;
+      if (to < 0 || to >= previous.length) return previous;
+      const next = [...previous];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  };
+
   const team = picked
     .map((id) => pool.find((pet) => pet.instanceId === id))
     .filter(Boolean);
@@ -571,6 +649,32 @@ export function DeciderDraftView({ series, side, onConfirm }) {
             );
           })}
         </div>
+
+        {/* The lineup, in order, with the same nudge controls as a squad. */}
+        {team.length > 0 && (
+          <ol className="flex flex-col gap-2 rounded-2xl border border-stone-800 bg-stone-900/40 p-4">
+            {team.map((pet, slot) => {
+              const species = getSpecies(pet.speciesId);
+              return (
+                <li key={pet.instanceId} className="flex items-center gap-3">
+                  <span className={`w-10 shrink-0 font-mono text-[9px] font-black uppercase ${slot === 0 ? 'text-amber-400' : 'text-stone-600'}`}>
+                    {slot === 0 ? 'Lead' : `#${slot + 1}`}
+                  </span>
+                  <img src={assetUrl(species.art)} alt="" className="h-7 w-7 shrink-0 object-contain" />
+                  <span className="min-w-0 flex-1 truncate font-serif text-sm font-bold text-stone-200">
+                    {displayName(species)}
+                  </span>
+                  <span className="flex shrink-0 flex-col">
+                    <SlotButton label="Move up" glyph="▲" disabled={slot === 0}
+                      onClick={() => reorder(slot, -1)} />
+                    <SlotButton label="Move down" glyph="▼" disabled={slot === team.length - 1}
+                      onClick={() => reorder(slot, 1)} />
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
 
         <div className="flex flex-col items-center gap-3 py-6">
           <span className="font-mono text-[11px] uppercase tracking-widest text-stone-500">

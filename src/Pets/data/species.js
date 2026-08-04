@@ -80,7 +80,7 @@ export const SPECIES = {
     family: 'scruffy',
     role: ROLE.TANK,
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.EARTH },
-    base: { hp: 7, atk: 25, def: 50, spc: 20 },
+    base: { hp: 5, atk: 25, def: 50, spc: 20 },
     special: 'shed',
     passives: ['thick_fur', 'scruffy_resolve'],
     art: '/images/pets/Scruffy.webp',
@@ -157,7 +157,7 @@ export const SPECIES = {
     passives: ['lovey_dovey', 'surface_tension'],
     art: '/images/pets/BubbleTrouble_Physical.webp',
     facing: 'Right',
-    flavor: 'Half of a pair. Charges faster when its partner is on the roster.',
+    flavor: 'Half of a pair. Its Special charges faster whenever the other one is on the team.',
   },
 
   bubble_trouble_affinity: {
@@ -173,7 +173,7 @@ export const SPECIES = {
     passives: ['lovey_dovey', 'surface_tension'],
     art: '/images/pets/BubbleTrouble_Affinity.webp',
     facing: 'Left',
-    flavor: 'The other half. Soaks elemental damage and banks charge off every popped shield.',
+    flavor: 'The other half. Blunts elemental damage and bursts bubbles over whatever is in front of it.',
   },
 
   /* ══ SECOND WAVE ═══════════════════════════════════════════════════
@@ -384,7 +384,7 @@ export const SPECIES = {
     typing: { offensive: ELEMENT.PHYSICAL, defensive: ELEMENT.WATER },
     base: { hp: 4, atk: 50, def: 25, spc: 30 },
     special: 'sonic_boom',
-    passives: ['dolphangs'],
+    passives: ['dolphangs', 'last_bite'],
     art: '/images/pets/Decrephin.webp',
     facing: 'Left',
   },
@@ -411,7 +411,7 @@ export const SPECIES = {
     typing: { offensive: ELEMENT.AIR, defensive: ELEMENT.AIR },
     base: { hp: 7, atk: 25, def: 45, spc: 25 },
     special: 'static_charge',
-    passives: ['first_impression'],
+    passives: ['first_impression', 'overcharge'],
     art: '/images/pets/Electrephant.webp',
     facing: 'Left',
   },
@@ -426,7 +426,7 @@ export const SPECIES = {
     special: 'toxic_spray',
     /** The roster's first Legendary passive, which is simply one that is always
      *  online and marked as such for the builder — no engine concept of its own. */
-    passives: ['toxic_terrain', 'venom_blood', 'virulence'],
+    passives: ['toxic_terrain', 'venom_blood', 'septic_burst'],
     art: '/images/pets/SwampFennec.webp',
     facing: 'Left',
   },

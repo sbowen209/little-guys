@@ -19,7 +19,7 @@ export const ROLE = {
 export const ROLE_META = {
   [ROLE.ATTACKER]:     { label: 'Attacker',       short: 'ATK',     hex: '#f87171', blurb: 'Raw physical damage. Ignores elemental matchups.' },
   [ROLE.AFF_ATTACKER]: { label: 'Affinity Attacker', short: 'AFF ATK', hex: '#fb923c', blurb: 'Elemental damage. Swings hard on the affinity chart.' },
-  [ROLE.TANK]:         { label: 'Tank',           short: 'DEF',     hex: '#34d399', blurb: 'Blocks physical pressure and outlasts attackers.' },
+  [ROLE.TANK]:         { label: 'Tank',           short: 'DEF',     hex: '#34d399', blurb: 'Walls physical Attackers and outlasts them.' },
   [ROLE.AFF_TANK]:     { label: 'Affinity Tank',  short: 'AFF DEF', hex: '#22d3ee', blurb: 'Blunts elemental damage and sustain.' },
   [ROLE.STUNNER]:      { label: 'Stunner',        short: 'STUN',    hex: '#c084fc', blurb: 'Control specialist. Builds Stun Counters on every hit.' },
   [ROLE.HEALER]:       { label: 'Healer',         short: 'HEAL',    hex: '#4ade80', blurb: 'Builds Heart Counters to top up the wounded.' },
@@ -87,9 +87,18 @@ export const ATTACK_ROLE_ADVANTAGE = {
   [ROLE.AFF_ATTACKER]: [ROLE.TANK],
 };
 
-/** Defending roles that gain Advantage on their DEF roll against these attacking roles. */
+/**
+ * Defending roles that gain Advantage on their DEF roll against these attacking
+ * roles.
+ *
+ * Neither Tank answers Stunners any more. A Tank used to roll advantage against
+ * Attackers *and* Stunners, which covered half the roster and left the Affinity
+ * Tank — 5 targets out of 28 — looking like a different quality of role rather
+ * than a different flavour of one. Each Tank now walls exactly the attacker it
+ * was built for, and Stunners get to do their job to everybody.
+ */
 export const DEFENSE_ROLE_ADVANTAGE = {
-  [ROLE.TANK]:     [ROLE.ATTACKER, ROLE.STUNNER],
+  [ROLE.TANK]:     [ROLE.ATTACKER],
   [ROLE.AFF_TANK]: [ROLE.AFF_ATTACKER, ROLE.HEALER],
 };
 

@@ -15,8 +15,11 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { simulateBattle } from './simulate.js';
-import { createCombatant, defenseDie, attackDie, addStacks } from './combatant.js';
-import { PET_DB, SPECIES, RULES, ROLE, ABILITIES, PASSIVES, STATUS, STATUS_DEFS } from '../data/index.js';
+import { createCombatant, defenseDie, attackDie, addStacks, maxSpcDie } from './combatant.js';
+import {
+  PET_DB, SPECIES, RULES, ROLE, ABILITIES, PASSIVES, STATUS, STATUS_DEFS,
+  DEFENSE_ROLE_ADVANTAGE,
+} from '../data/index.js';
 
 const SAMPLES = Number(process.argv[2]) || 2000;
 /** Level every pet is tested at. Level 5 is where the second passive lands. */
@@ -432,7 +435,7 @@ check('No match ended by running out of turns', capped === 0);
   let poisonSpent = 0;        // a Poison stack burned off by ticking
   let sawPoisonProc = 0;
   let potencyMismatch = 0;    // a tick that ignored its captured potency
-  let sawVirulent = 0;        // a Poison stack applied by Virulence
+  let sawRaised = 0;          // a tick applied at above-base potency
   let slicedKept = 0;         // a Sliced proc that failed to spend its stack
   let sawSlicedProc = 0;
   let fieldLost = 0;          // a field that stopped being listed mid-match
@@ -514,7 +517,7 @@ check('No match ended by running out of turns', capped === 0);
           // Potency is captured from whoever applied the stack, so the damage
           // must be procs x that potency and not the status's base damage.
           if (e.damage !== procs * e.potency) potencyMismatch += 1;
-          if (e.potency > 1) sawVirulent += 1;
+          if (e.potency > 1) sawRaised += 1;
         }
       }
 
@@ -542,8 +545,12 @@ check('No match ended by running out of turns', capped === 0);
     sawPermanentDamp > 0 && permanentDampLost === 0);
   check(`Poison is never spent by ticking (${sawPoisonProc} procs)`,
     sawPoisonProc > 0 && poisonSpent === 0);
-  check(`A ticking status bites for the potency it was applied with (${sawVirulent} virulent ticks)`,
-    sawPoisonProc > 0 && potencyMismatch === 0 && sawVirulent > 0);
+  // No pet currently raises a ticking status's potency — Virulence was retired
+  // when the Fennec's Lv.5 became Septic Burst. The invariant is still asserted
+  // because the `tickPotency` machinery is live and the next pet to use it
+  // should not have to rediscover whether it works.
+  check(`A ticking status bites for the potency it was applied with (${sawRaised} raised ticks)`,
+    sawPoisonProc > 0 && potencyMismatch === 0);
   check(`A Sliced proc spends exactly one stack (${sawSlicedProc} procs)`,
     sawSlicedProc > 0 && slicedKept === 0);
   check(`A field outlives the pet that set it (${sawField} established)`,
@@ -552,6 +559,46 @@ check('No match ended by running out of turns', capped === 0);
 
 // Stun is a counter now, not a flag: a second one costs a second turn.
 check('Stunned stacks rather than collapsing to one', STATUS_DEFS[STATUS.STUNNED].stackable === true);
+
+// Neither Tank walls a Stunner any more. Checked against real rolls rather than
+// the table alone, because the table is only half the rule — the engine has to
+// stop citing it as a reason.
+{
+  const walls = Object.values(DEFENSE_ROLE_ADVANTAGE).some((list) => list.includes(ROLE.STUNNER));
+  let citedRole = 0;
+  let stunnerAttacks = 0;
+  for (let i = 0; i < 120; i += 1) {
+    const { timeline } = simulateBattle({
+      team1: randomTeam(RULES.TEAM_SIZE, 'ta', 5),
+      team2: randomTeam(RULES.TEAM_SIZE, 'tb', 5),
+    });
+    for (const e of timeline) {
+      if (e.type !== 'roll' || !e.defender?.reasons) continue;
+      const attacker = e.state.teams[e.attacker.side][e.attacker.slot];
+      if (SPECIES[attacker.speciesId]?.role !== ROLE.STUNNER) continue;
+      stunnerAttacks += 1;
+      if (e.defender.reasons.includes('Role')) citedRole += 1;
+    }
+  }
+  check(`No Tank rolls DEF advantage against a Stunner (${stunnerAttacks} Stunner attacks)`,
+    !walls && stunnerAttacks > 0 && citedRole === 0);
+}
+
+// Lovey Dovey resizes the die rather than sharing charge, so the pair must show
+// a bigger Max SPC together than either does alone.
+{
+  const solo = createCombatant(entryFor('bubble_trouble_physical', 'solo', 1), 0, 0);
+  solo.team = [solo];
+  const pair = [
+    createCombatant(entryFor('bubble_trouble_physical', 'p1', 1), 0, 0),
+    createCombatant(entryFor('bubble_trouble_affinity', 'p2', 1), 0, 1),
+  ];
+  for (const p of pair) p.team = pair;
+  check(
+    `Lovey Dovey grows Max SPC only with the partner present (d${maxSpcDie(solo)} -> d${maxSpcDie(pair[0])})`,
+    maxSpcDie(pair[0]) === Math.round(maxSpcDie(solo) * 1.5) && maxSpcDie(solo) === solo.stats.spc,
+  );
+}
 
 // First Impression is once per enemy, forever — a 1v1 is the clean way to see
 // it, because there is exactly one opponent for its whole life.

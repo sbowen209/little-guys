@@ -13,6 +13,7 @@ import PetSprite from './PetSprite.jsx';
 import PetNameplate from './PetNameplate.jsx';
 import StatusFlank from './StatusFlank.jsx';
 import PetVitals from './PetVitals.jsx';
+import PetKit from './PetKit.jsx';
 import BenchWings from './BenchWings.jsx';
 import TurnCounter from './TurnCounter.jsx';
 import { RollCards, CheckCard } from './RollCards.jsx';
@@ -279,6 +280,10 @@ function BattleStage({
 
             {/* ── UI ─────────────────────────────────────────────── */}
             <div className="pb-layer pb-layer--ui">
+              {[0, 1].map((side) => (
+                <PetKit key={`kit-${side}`} pet={leads[side]} side={side} />
+              ))}
+
               {[0, 1].map((side) => (
                 <PetNameplate
                   key={side}
