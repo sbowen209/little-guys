@@ -92,16 +92,27 @@ Stable pets are scored **against the whole species pool**, not against each
 other — measuring eight pets against themselves only says which of eight is
 best, which is not the question.
 
-The table carries `now%`, `at Lv.7`, `gain` and `per level`. Turn that into an
-actual recommendation:
+**Levels are a staircase, not a ramp.** Never summarise a level curve with an
+average — the Lv.5 passive is a cliff, and averaging across the span hides it.
+An earlier report did exactly that and mis-ranked the whole investment list: it
+smeared a 13-point single-level jump into "+1.21 per level" and recommended the
+wrong pet. The script measures **every level separately** for this reason.
+
+Read the curve, not the endpoints:
 
 - **`now%`** is present viability — can you field it today.
-- **`per level`** is investment return — what one level buys.
-- The best investment is a pet with a **high `per level` and a ceiling worth
-  reaching**. A pet already near its ceiling (`gain` ≈ 0) is *finished*: levels
-  spent on it are wasted no matter how strong it currently is.
-- A low `now%` with a high `per level` is the classic buy. A high `now%` with a
-  flat curve is a pet to field, not to fund.
+- **`jump` / `at`** is the cliff: the biggest single level, and where it lands.
+  A jump only counts if it clears the noise floor (see §3) — the script marks the
+  ones that do.
+- A pet whose curve is flat everywhere is **finished**; levels are wasted on it
+  however strong it currently is.
+- The best buy is the largest *real* cliff you can actually reach.
+
+**Bonded pets need the pair table.** Lovey and Dovey's passives are gated behind
+each other, so measured alone their Lv.5 buys nothing and the curve looks flat.
+The script also runs them as a pair, with no assumption, and that is the number
+to quote — the cliff only exists if both are fielded. Say so explicitly: this is
+an all-or-nothing investment, not a per-pet one.
 
 Rank the stable explicitly by investment priority and say why. If one pet
 dominates the stable, say what that does to Gauntlet squad-building — the

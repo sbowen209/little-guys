@@ -60,11 +60,12 @@ const isBlueBubble = (unitId) => {
  * Max ATK mod — so the rolls come out the same as if the partner were present
  * and then dead, without having to force a partner into every team.
  */
-const applyAssumption = (unitId, stats) => (
-  isBlueBubble(unitId)
-    ? { ...stats, atk: stats.atk + 20, spc: Math.round(stats.spc * 1.5) }
-    : stats
-);
+const applyAssumption = (unitId, stats, level) => {
+  if (!isBlueBubble(unitId)) return stats;
+  const out = { ...stats, spc: Math.round(stats.spc * 1.5) };   // Lovey Dovey, Lv.1
+  if (level >= 5) out.atk += 20;                                // Surface Tension, Lv.5
+  return out;
+};
 
 /* ── ENTRY BUILDERS ────────────────────────────────────────────────── */
 
@@ -85,7 +86,7 @@ const speciesEntry = (id, tag) => {
       atk: s.base.atk + bump,
       def: s.base.def + bump,
       spc: s.base.spc + bump,
-    }),
+    }, level),
   };
 };
 
@@ -103,7 +104,7 @@ const stableEntry = (id, tag, level) => {
   const to = Math.max(from, level ?? from);
   const stats = { ...s.base };
   for (let i = from; i < to; i += 1) stats[KEYS[Math.floor(Math.random() * 3)]] += rollDie(4);
-  return { instanceId: `${id}-${tag}`, speciesId: id, level: to, stats: applyAssumption(id, stats) };
+  return { instanceId: `${id}-${tag}`, speciesId: id, level: to, stats: applyAssumption(id, stats, to) };
 };
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -159,31 +160,59 @@ for (let m = 0; m < ROSTER_MATCHES; m += 1) {
  * random species. Measuring the stable against itself only says which of eight
  * is best; this says how each one stands up to the game.
  */
-const STABLE_MATCHES = 2600 * SCALE;
-const stableNow = tally(STABLE_IDS);
-const stableMax = tally(STABLE_IDS);
+const STABLE_MATCHES = 2200 * SCALE;
 const MAX_LEVEL = 7;
 
-const runStable = (into, levelFor) => {
-  for (const id of STABLE_IDS) {
-    for (let m = 0; m < STABLE_MATCHES; m += 1) {
-      const mine = [
-        stableEntry(id, 'lead', levelFor(id)),
-        ...Array.from({ length: 4 }, (_, i) => speciesEntry(pick(ids), `a${i}`)),
-      ];
-      const foes = Array.from({ length: 5 }, (_, i) => speciesEntry(pick(ids), `b${i}`));
-      const { winner } = simulateBattle({ team1: mine, team2: foes }).outcome;
-      if (winner === null) continue;
-      into[id].games += 1;
-      if (winner === 0) into[id].wins += 1;
-    }
+/**
+ * Every level from authored to the cap, one measurement each.
+ *
+ * A straight-line `(cap − now) / levels` average is WRONG for this game and it
+ * cost a whole report: level-ups are a staircase, not a ramp, because the Lv.5
+ * passive is a cliff. Averaging across the span hid an 11-point single-level
+ * jump on the Bubble Troubles and mis-ranked the entire investment list. Price
+ * each step and the cliff shows itself.
+ */
+const measureAt = (members, n = STABLE_MATCHES) => {
+  let wins = 0; let games = 0;
+  for (let m = 0; m < n; m += 1) {
+    const mine = [
+      ...members(),
+      ...Array.from({ length: 5 - members().length }, (_, i) => speciesEntry(pick(ids), `a${i}`)),
+    ];
+    const foes = Array.from({ length: 5 }, (_, i) => speciesEntry(pick(ids), `b${i}`));
+    const { winner } = simulateBattle({ team1: mine, team2: foes }).outcome;
+    if (winner === null) continue;
+    games += 1;
+    if (winner === 0) wins += 1;
   }
+  return { rate: (wins / games) * 100, games };
 };
 
-console.error('· stable vs the whole pool (authored levels)...');
-runStable(stableNow, (id) => PET_DB[id].level ?? 1);
-console.error('· stable vs the whole pool (levelled to the cap)...');
-runStable(stableMax, () => MAX_LEVEL);
+/** Bonded pets are also run as a pair — the only state their kit works in. */
+const BONDED = STABLE_IDS.filter((id) => (PET_DB[id].bond));
+
+const curveFor = (label, build, from) => {
+  const points = [];
+  for (let lv = from; lv <= MAX_LEVEL; lv += 1) {
+    const { rate: r, games } = measureAt(() => build(lv));
+    const step = points.length ? r - points[points.length - 1].rate : 0;
+    points.push({ level: lv, rate: r, step, games });
+    console.error(`  ${label} Lv.${lv} → ${r.toFixed(1)}%`);
+  }
+  return points;
+};
+
+console.error('· stable level curves...');
+const curves = {};
+for (const id of STABLE_IDS) {
+  curves[id] = curveFor(PET_DB[id].name, (lv) => [stableEntry(id, 'lead', lv)], PET_DB[id].level ?? 1);
+}
+
+console.error('· bonded pair curve...');
+const pairFrom = Math.min(...BONDED.map((id) => PET_DB[id].level ?? 1));
+const pairCurve = BONDED.length === 2
+  ? curveFor('Pair', (lv) => BONDED.map((id, i) => stableEntry(id, `b${i}`, lv)), pairFrom)
+  : [];
 
 /* ── REPORT ────────────────────────────────────────────────────────── */
 
@@ -214,37 +243,49 @@ for (const r of speciesRows) {
   );
 }
 
-const stableRows = STABLE_IDS.map((id) => {
-  const unit = PET_DB[id];
-  const now = rate(stableNow[id]);
-  const max = rate(stableMax[id]);
-  const level = unit.level ?? 1;
-  const levels = MAX_LEVEL - level;
+const summarise = (id, points, name, role) => {
+  const first = points[0];
+  const last = points[points.length - 1];
+  const steps = points.slice(1);
+  const best = steps.reduce((b, p) => (p.step > (b?.step ?? -Infinity) ? p : b), null);
   return {
-    id,
-    name: unit.name,
-    role: ROLE_META[unit.role].short,
-    level,
-    levels,
-    now,
-    max,
-    gain: max - now,
-    perLevel: levels > 0 ? (max - now) / levels : 0,
-    n: stableNow[id].games,
+    id, name, role,
+    level: first.level,
+    now: first.rate,
+    max: last.rate,
+    gain: last.rate - first.rate,
+    nextStep: steps[0]?.step ?? 0,
+    nextLevel: steps[0]?.level ?? first.level,
+    bestStep: best?.step ?? 0,
+    bestStepAt: best?.level ?? null,
+    points: points.map((p) => ({ level: p.level, rate: p.rate, step: p.step })),
+    n: first.games,
     assumed: isBlueBubble(id),
   };
-}).sort((a, b) => b.now - a.now);
+};
 
-console.log(`\nSTABLE vs THE WHOLE POOL · n~${stableRows[0].n} per pet per column`);
-console.log('pet             role      lv   now%    at Lv.7   gain   per level');
-console.log('-'.repeat(72));
+const stableRows = STABLE_IDS
+  .map((id) => summarise(id, curves[id], PET_DB[id].name, ROLE_META[PET_DB[id].role].short))
+  .sort((a, b) => b.bestStep - a.bestStep);
+
+console.log(`\nSTABLE vs THE WHOLE POOL · n~${stableRows[0].n} per level · ranked by biggest single-level jump`);
+console.log('pet             role      lv   now%    Lv.7    next lv   BIGGEST JUMP');
+console.log('-'.repeat(78));
 for (const r of stableRows) {
   console.log(
     (r.name + star(r.id)).padEnd(16), r.role.padEnd(8), String(r.level).padStart(2),
-    r.now.toFixed(1).padStart(6), r.max.toFixed(1).padStart(9),
-    ((r.gain >= 0 ? '+' : '−') + Math.abs(r.gain).toFixed(1)).padStart(7),
-    (r.levels > 0 ? `${r.perLevel >= 0 ? '+' : '−'}${Math.abs(r.perLevel).toFixed(2)}` : '—').padStart(10),
+    r.now.toFixed(1).padStart(6), r.max.toFixed(1).padStart(7),
+    ((r.nextStep >= 0 ? '+' : '−') + Math.abs(r.nextStep).toFixed(1)).padStart(9),
+    (r.bestStepAt ? `${r.bestStep >= 0 ? '+' : '−'}${Math.abs(r.bestStep).toFixed(1)} at Lv.${r.bestStepAt}` : '—').padStart(15),
   );
+}
+
+if (pairCurve.length) {
+  console.log('\nTHE BONDED PAIR, fielded together (no assumption — the bond is genuinely live)');
+  console.log('  level   win%    step');
+  for (const p of pairCurve) {
+    console.log(`  Lv.${String(p.level).padEnd(3)} ${p.rate.toFixed(1).padStart(6)}  ${p.step ? (p.step >= 0 ? '+' : '−') + Math.abs(p.step).toFixed(1) : '—'}`);
+  }
 }
 
 console.log('\n* Bubble Trouble (Affinity) / Dovey measured with BOTH passives assumed'
@@ -254,11 +295,12 @@ console.log('===JSON===');
 console.log(JSON.stringify({
   generatedAt: new Date().toISOString(),
   scale: SCALE,
-  samples: { duelsPerPair: DUELS_PER_PAIR, rosterMatches: ROSTER_MATCHES, stableMatches: STABLE_MATCHES },
+  samples: { duelsPerPair: DUELS_PER_PAIR, rosterMatches: ROSTER_MATCHES, stableMatchesPerLevel: STABLE_MATCHES },
   assumption: {
     unit: ASSUMED,
     note: 'Both passives assumed online: Max SPC x1.5 (Lovey Dovey), +20 Max ATK (Surface Tension).',
   },
   species: speciesRows,
   stable: stableRows,
+  bondedPair: pairCurve.map((p) => ({ level: p.level, rate: p.rate, step: p.step })),
 }, null, 2));
