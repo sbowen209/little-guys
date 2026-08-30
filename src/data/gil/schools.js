@@ -21,11 +21,11 @@ export const AFFINITY_ORDER = ['Earth', 'Water', 'Air', 'Fire', 'Spirit', 'Shado
 // scanner never purges them).
 export const AFF_STYLE = {
   Earth: {
-    text: 'text-emerald-300', ring: 'ring-emerald-400/60', border: 'border-emerald-500/50',
-    solid: 'bg-emerald-500', softBg: 'bg-emerald-500/10', hover: 'hover:border-emerald-400',
-    chip: 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/40',
-    glow: 'shadow-[0_0_35px_-8px_rgba(16,185,129,0.55)]', grad: 'from-emerald-500/20',
-    dot: 'bg-emerald-400',
+    text: 'text-lime-300', ring: 'ring-lime-400/60', border: 'border-lime-500/50',
+    solid: 'bg-lime-500', softBg: 'bg-lime-500/10', hover: 'hover:border-lime-400',
+    chip: 'bg-lime-500/15 text-lime-200 border border-lime-500/40',
+    glow: 'shadow-[0_0_35px_-8px_rgba(132,204,22,0.55)]', grad: 'from-lime-500/20',
+    dot: 'bg-lime-400',
   },
   Water: {
     text: 'text-sky-300', ring: 'ring-sky-400/60', border: 'border-sky-500/50',
