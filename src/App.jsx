@@ -7,11 +7,12 @@ import StatsView from './views/StatsView';
 import RacingSetup from './views/RacingSetup';
 import ActiveRace from './views/ActiveRace';
 import { useMetaProgress } from './hooks/useMetaProgress';
+import CharacterSheet from './views/CharacterSheet';
 
 import { PetBattler } from './Pets';
 
 function App() {
-  const [appMode, setAppMode] = useState('gateway'); // gateway | adventure | racing | petbattler
+  const [appMode, setAppMode] = useState('gateway'); // gateway | adventure | racing | petbattler | gil
   const [currentView, setCurrentView] = useState('menu'); // menu | setup | run | stats | race | battle
   const [runConfig, setRunConfig] = useState(null);
   
@@ -29,8 +30,8 @@ function App() {
           LITTLE GUYS
         </h1>
 
-        {/* Updated to a 3-column grid to fit the new module */}
-        <div className="z-10 grid w-full max-w-6xl grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
+        {/* 4-column grid to fit the character-sheet module */}
+        <div className="z-10 grid w-full max-w-6xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 md:gap-8">
           
           <button
             onClick={() => {
@@ -84,6 +85,21 @@ function App() {
             </p>
           </button>
 
+          {/* GIL CHARACTER SHEET ENTRY POINT */}
+          <button
+            onClick={() => setAppMode('gil')}
+            className="group relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-3xl border-2 border-stone-800 bg-stone-900/60 p-10 text-center shadow-xl backdrop-blur-sm transition-all hover:-translate-y-2 hover:border-violet-400 hover:bg-stone-800 hover:shadow-[0_0_40px_rgba(139,92,246,0.3)]"
+          >
+            <span className="pointer-events-none absolute inset-0 -translate-x-full -skew-x-12 bg-white/5 transition-all duration-700 group-hover:animate-[shine_0.7s_ease-out]" />
+            <span className="mb-4 text-5xl drop-shadow-lg transition-transform group-hover:scale-110">📖</span>
+            <h2 className="mb-3 font-serif text-2xl font-black text-white transition-colors group-hover:text-violet-400">
+              Gil's Sheet
+            </h2>
+            <p className="text-xs leading-relaxed text-stone-400">
+              Gil's living character sheet — browse every spell school and manage your active 4-school loadout.
+            </p>
+          </button>
+
         </div>
 
         <style dangerouslySetInnerHTML={{ __html: `
@@ -103,6 +119,17 @@ function App() {
     return (
       <div className="min-h-screen bg-stone-950 font-sans text-stone-100">
         <PetBattler onBack={() => setAppMode('gateway')} />
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // GIL CHARACTER SHEET ROUTING
+  // ---------------------------------------------------------------------------
+  if (appMode === 'gil') {
+    return (
+      <div className="min-h-screen bg-stone-950 font-sans text-stone-100">
+        <CharacterSheet onBack={() => setAppMode('gateway')} />
       </div>
     );
   }
