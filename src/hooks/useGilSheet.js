@@ -3,7 +3,7 @@
 // loadout (4 schools, each a different affinity), saved loadouts, petal pool,
 // resource + burst counters, bloom-bingo flags, and the Ardenvale toggle.
 import { useCallback, useEffect, useState } from 'react';
-import { SCHOOL_BY_ID } from '../data/gil/schools';
+import { SCHOOL_BY_ID, SCHOOLS, AFFINITY_ORDER } from '../data/gil/schools';
 import { BURSTS, RESOURCES, PETAL_AFFINITIES, MAX_HP, FLOWERS } from '../data/gil/core';
 
 const KEY = 'gil-sheet-v1';
@@ -27,6 +27,16 @@ const DEFAULT = {
   ally: { battery: 100 }, // Aida's Ether Battery
   allyUses: {}, // { [technique name]: times used this fight }
 };
+
+// Fisher-Yates, so every ordering is equally likely.
+function shuffle(input) {
+  const a = [...input];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 function load() {
   try {
@@ -103,6 +113,24 @@ export function useGilSheet() {
     });
   }, []);
 
+  // Roll a fresh legal loadout: 4 schools, each of a different affinity.
+  // `guaranteeShadow` forces one of those affinities to be Shadow.
+  const randomizeLoadout = useCallback((guaranteeShadow = false) => {
+    setState((prev) => {
+      const picked = guaranteeShadow
+        ? ['Shadow', ...shuffle(AFFINITY_ORDER.filter((a) => a !== 'Shadow')).slice(0, 3)]
+        : shuffle(AFFINITY_ORDER).slice(0, 4);
+      // Keep the canonical affinity order so the panels read consistently.
+      const loadout = AFFINITY_ORDER
+        .filter((a) => picked.includes(a))
+        .map((a) => {
+          const options = SCHOOLS.filter((s) => s.affinity === a);
+          return options[Math.floor(Math.random() * options.length)].id;
+        });
+      return { ...prev, loadout };
+    });
+  }, []);
+
   const saveCurrentLoadout = useCallback((name) => {
     setState((prev) => {
       if (!prev.loadout.length) return prev;
@@ -152,7 +180,7 @@ export function useGilSheet() {
 
   return {
     state, setPart,
-    toggleSchool, blockReason, clearLoadout, applyLoadout,
+    toggleSchool, blockReason, clearLoadout, applyLoadout, randomizeLoadout,
     saveCurrentLoadout, deleteSaved,
     bump, setCounter, toggleArdenvale, toggleBloom, resetTrackers,
   };

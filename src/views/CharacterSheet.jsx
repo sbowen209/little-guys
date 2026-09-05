@@ -37,13 +37,15 @@ function CoreKitTable({ uses, onSet }) {
       </div>
       {CORE_ACTIONS.map((k) => {
         const tier = TIER[k.type];
+        const spentOut = k.charges != null && (uses[k.name] || 0) >= k.charges;
         return (
           <div key={k.name + k.type} className="grid grid-cols-[68px_92px_1fr] items-center gap-2 border-b border-neutral-900 px-2.5 py-1.5 transition last:border-b-0 hover:bg-neutral-950">
             <Charges total={k.charges} used={uses[k.name] || 0} tier={tier} onSet={(v) => onSet(k.name, v)} />
-            <span className={`text-[11px] ${tier.label}`}>
+            <span className={`text-[11px] ${tier.label} ${spentOut ? 'opacity-40' : ''}`}>
               {SHORT_TYPE[k.type]}{k.charges != null ? ` (${k.charges})` : ''}
             </span>
-            <HoverName title={k.name} desc={k.desc} accent={tier.name} className={`text-sm font-medium ${tier.name}`} />
+            <HoverName title={k.name} desc={k.desc} accent={tier.name}
+              className={`text-sm font-medium ${tier.name} ${spentOut ? 'opacity-40' : ''}`} />
           </div>
         );
       })}
@@ -248,6 +250,7 @@ export default function CharacterSheet({ onBack }) {
   const [affFilter, setAffFilter] = useState('All');
   const [saveName, setSaveName] = useState('');
   const [showLoadouts, setShowLoadouts] = useState(false);
+  const [rollShadow, setRollShadow] = useState(true);
 
   const loadoutSchools = state.loadout.map((id) => SCHOOL_BY_ID[id]).filter(Boolean);
   const usedAffinities = new Set(loadoutSchools.map((s) => s.affinity));
@@ -257,6 +260,10 @@ export default function CharacterSheet({ onBack }) {
   const statValue = (s) => (state.ardenvale ? s.ardenvale : s.base);
   const maxHp = state.ardenvale ? ARDEN_HP : MAX_HP;
   const hp = state.vitals.hp;
+  const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+  const hpTone = hpPct <= 30 ? { text: 'text-rose-400', bar: 'bg-rose-500/80' }
+    : hpPct <= 60 ? { text: 'text-amber-400', bar: 'bg-amber-500/80' }
+      : { text: 'text-emerald-400', bar: 'bg-emerald-500/80' };
 
   return (
     <div className="min-h-screen bg-black text-neutral-300">
@@ -288,22 +295,32 @@ export default function CharacterSheet({ onBack }) {
             {/* left rail — trackers */}
             <aside className="space-y-5 lg:sticky lg:top-14 lg:self-start">
               <div>
-                <img src={assetUrl(IDENTITY.image)} alt={IDENTITY.fullName} className="h-64 w-full rounded border border-neutral-800 object-cover object-top" />
+                {/* full art, uncropped — Gil.webp is 1805×1947 with alpha */}
+                <img
+                  src={assetUrl(IDENTITY.image)}
+                  alt={IDENTITY.fullName}
+                  className="aspect-[1805/1947] w-full rounded border border-neutral-800 bg-neutral-950 object-contain p-1"
+                />
                 <h1 className="mt-2 text-3xl font-semibold leading-none text-neutral-50">{IDENTITY.name}</h1>
                 <p className="mt-1 text-[11px] text-emerald-500/90">{IDENTITY.title}</p>
               </div>
 
               <Section title="Stats">
                 <div className="rounded border border-neutral-800">
-                  <div className="flex items-center justify-between border-b border-neutral-900 px-2.5 py-1.5">
-                    <span className="text-[12px] text-neutral-400">Health</span>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number" value={hp}
-                        onChange={(e) => gil.setCounter('vitals', 'hp', Number(e.target.value))}
-                        className="w-14 rounded border border-neutral-800 bg-black px-1 py-0.5 text-right font-mono text-sm font-semibold tabular-nums text-emerald-400 outline-none focus:border-emerald-500"
-                      />
-                      <span className={`font-mono text-[11px] ${state.ardenvale ? 'text-emerald-500' : 'text-neutral-600'}`}>/ {maxHp}</span>
+                  <div className="border-b border-neutral-900">
+                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                      <span className="text-[12px] text-neutral-400">Health</span>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number" value={hp}
+                          onChange={(e) => gil.setCounter('vitals', 'hp', Number(e.target.value))}
+                          className={`w-14 rounded border border-neutral-800 bg-black px-1 py-0.5 text-right font-mono text-sm font-semibold tabular-nums outline-none focus:border-emerald-500 ${hpTone.text}`}
+                        />
+                        <span className={`font-mono text-[11px] ${state.ardenvale ? 'text-emerald-500' : 'text-neutral-600'}`}>/ {maxHp}</span>
+                      </div>
+                    </div>
+                    <div className="h-0.5 w-full bg-neutral-900">
+                      <div className={`h-full transition-[width] duration-300 ${hpTone.bar}`} style={{ width: `${hpPct}%` }} />
                     </div>
                   </div>
                   {STATS.filter((s) => s.key !== 'health').map((s) => {
@@ -447,6 +464,24 @@ export default function CharacterSheet({ onBack }) {
                   );
                 })}
               </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-neutral-900 pt-2">
+                <button
+                  onClick={() => gil.randomizeLoadout(rollShadow)}
+                  className="rounded border border-neutral-700 px-2.5 py-1.5 text-[13px] font-semibold text-neutral-200 transition hover:border-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400"
+                >
+                  Roll 4 random schools
+                </button>
+                <label className="flex cursor-pointer select-none items-center gap-1.5 text-[11px] text-neutral-500">
+                  <input
+                    type="checkbox"
+                    checked={rollShadow}
+                    onChange={(e) => setRollShadow(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-violet-500"
+                  />
+                  always include a <span className="text-violet-400">Shadow</span> school
+                </label>
+              </div>
+
               <div className="mt-2 flex gap-2">
                 <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this loadout…"
                   className="min-w-0 flex-1 rounded border border-neutral-800 bg-black px-2.5 py-1.5 text-[13px] text-neutral-200 placeholder-neutral-700 outline-none focus:border-emerald-500" />

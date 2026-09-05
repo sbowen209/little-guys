@@ -14,7 +14,7 @@ export default function AllySheet({ ally, battery, onBattery, uses, onUse }) {
           <img
             src={assetUrl(ally.image)}
             alt={ally.name}
-            className="h-56 w-full rounded border border-neutral-800 object-cover object-top"
+            className="aspect-[3/4] w-full rounded border border-neutral-800 bg-neutral-950 object-contain p-1"
           />
           {ally.imagePlaceholder && (
             <p className="mt-1 text-[10px] italic text-neutral-600">placeholder art — swap when Aida's portrait exists</p>
@@ -63,12 +63,16 @@ export default function AllySheet({ ally, battery, onBattery, uses, onUse }) {
             <div className="grid grid-cols-[86px_1fr] items-center gap-2 border-b border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
               <span>Uses</span><span>Technique</span>
             </div>
-            {ally.techniques.map((t) => (
-              <div key={t.name} className="grid grid-cols-[86px_1fr] items-center gap-2 border-b border-neutral-900 px-2.5 py-1.5 transition last:border-b-0 hover:bg-neutral-950">
-                <Charges total={t.charges} used={uses[t.name] || 0} tier={SPIRIT_TIER} onSet={(v) => onUse(t.name, v)} />
-                <HoverName title={t.name} desc={t.desc} accent={SPIRIT_TIER.name} className={`text-sm font-medium ${SPIRIT_TIER.name}`} />
-              </div>
-            ))}
+            {ally.techniques.map((t) => {
+              const spentOut = (uses[t.name] || 0) >= t.charges;
+              return (
+                <div key={t.name} className="grid grid-cols-[86px_1fr] items-center gap-2 border-b border-neutral-900 px-2.5 py-1.5 transition last:border-b-0 hover:bg-neutral-950">
+                  <Charges total={t.charges} used={uses[t.name] || 0} tier={SPIRIT_TIER} onSet={(v) => onUse(t.name, v)} />
+                  <HoverName title={t.name} desc={t.desc} accent={SPIRIT_TIER.name}
+                    className={`text-sm font-medium ${SPIRIT_TIER.name} ${spentOut ? 'opacity-40' : ''}`} />
+                </div>
+              );
+            })}
           </div>
         </Section>
 
