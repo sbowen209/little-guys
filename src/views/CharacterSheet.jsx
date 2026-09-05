@@ -1,166 +1,163 @@
 // src/views/CharacterSheet.jsx
-// Gil's live play dashboard — a glanceable second-screen reference for Roll20.
-// Emerald-accented. The equipped spells are the focus; each school carries its
-// own petal counter, bursts are big, and long text lives in hover tooltips.
+// Gil's play sheet. Deliberately restrained: black ground, thin rules, tabular
+// numbers. Names are visible; every long rules paragraph lives in a tooltip so
+// the page stays scannable at a glance on a second monitor.
 import { useMemo, useState } from 'react';
 import { assetUrl } from '../utils/assets';
 import { useGilSheet } from '../hooks/useGilSheet';
 import Tip from '../components/gil/Tip';
 import {
-  SCHOOLS, SCHOOL_BY_ID, AFFINITY_ORDER, AFFINITIES, AFF_STYLE, PAST_LOADOUTS, SCHOOL_BY_NAME,
+  SCHOOLS, SCHOOL_BY_ID, AFFINITY_ORDER, AFF_STYLE, PAST_LOADOUTS, SCHOOL_BY_NAME,
 } from '../data/gil/schools';
 import {
-  IDENTITY, STATS, BURSTS, CORE_KIT, FLOWERS,
+  IDENTITY, STATS, BURSTS, MAX_HP, CORE_KIT, FLOWERS,
   BLESSED_ITEMS, BLOOM_BINGO, CASTING_RULES,
 } from '../data/gil/core';
 
-const CORE_ACTIONS = CORE_KIT.filter((k) => ['Essential', 'Minor', 'Intermediate', 'Advanced'].includes(k.type));
-const CORE_PASSIVES = CORE_KIT.filter((k) => ['Affinity', 'Nile Aura', 'Passive'].includes(k.type));
+const ACTION_TYPES = ['Essential', 'Minor', 'Intermediate', 'Advanced'];
+const CORE_ACTIONS = CORE_KIT.filter((k) => ACTION_TYPES.includes(k.type));
+const CORE_PASSIVES = CORE_KIT.filter((k) => !ACTION_TYPES.includes(k.type));
 
-const flowerColor = (c) => ({
-  red: '#ef4444', blue: '#3b82f6', yellow: '#eab308',
-  green: '#22c55e', black: '#3f3f46', oni: '#a855f7',
-}[c] || '#78716c');
-
-// ───────────────────────────── controls ─────────────────────────────
-
-function Stepper({ value, onDec, onInc, tone = 'text-stone-100', size = 'md' }) {
-  const btn = size === 'lg' ? 'h-8 w-8 text-lg' : size === 'sm' ? 'h-5 w-5 text-[13px]' : 'h-6 w-6 text-sm';
-  const num = size === 'lg' ? 'w-8 text-2xl' : size === 'sm' ? 'w-5 text-sm' : 'w-6 text-lg';
-  return (
-    <div className="flex items-center gap-1">
-      <button onClick={onDec} className={`grid ${btn} place-items-center rounded-md border border-stone-700 bg-stone-800 leading-none text-stone-400 transition hover:border-stone-500 hover:text-white active:scale-90`} aria-label="decrease">−</button>
-      <span className={`${num} text-center font-mono font-black tabular-nums ${tone}`}>{value}</span>
-      <button onClick={onInc} className={`grid ${btn} place-items-center rounded-md border border-stone-700 bg-stone-800 leading-none text-stone-400 transition hover:border-stone-500 hover:text-white active:scale-90`} aria-label="increase">+</button>
-    </div>
-  );
-}
-
-function SectionHeader({ children, right }) {
-  return (
-    <div className="mb-2 flex items-center justify-between gap-2">
-      <h2 className="flex items-center gap-2 font-serif text-sm font-black uppercase tracking-[0.15em] text-stone-200">
-        <span className="inline-block h-4 w-1 rounded-full bg-emerald-400" />{children}
-      </h2>
-      {right}
-    </div>
-  );
-}
-
-// ───────────────────────────── spell pieces ─────────────────────────────
-
-const TRAIT_ACCENT = {
-  Passive: 'text-stone-300', Debuff: 'text-purple-300', Buff: 'text-emerald-300', Summon: 'text-sky-300',
+const FLOWER_HEX = {
+  Red: '#dc2626', Blue: '#2563eb', Yellow: '#ca8a04',
+  Green: '#16a34a', 'Black Root': '#404040', Oni: '#7c3aed',
 };
 
-// A prominent usable-spell row: number + name, full text on hover.
-function SpellPill({ index, name, desc, level, aff }) {
-  const st = AFF_STYLE[aff];
-  const tint = level === 'Advanced'
-    ? 'border-rose-500/40 bg-rose-500/[0.07] hover:bg-rose-500/15'
-    : level === 'Inter'
-      ? 'border-amber-500/30 bg-amber-500/[0.06] hover:bg-amber-500/12'
-      : 'border-stone-700/70 bg-stone-900/70 hover:bg-stone-800';
+// ─────────────────────────── primitives ───────────────────────────
+
+function Stepper({ value, onDec, onInc, tone = 'text-neutral-100', wide }) {
   return (
-    <Tip content={desc} title={name} accent={st.text} className="block">
-      <span className={`flex cursor-help items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition ${tint}`}>
-        {index != null && (
-          <span className={`grid h-5 w-5 shrink-0 place-items-center rounded font-mono text-xs font-black ${st.softBg} ${st.text}`}>{index}</span>
-        )}
-        <span className="truncate text-sm font-semibold text-stone-50">{name}</span>
+    <div className="flex items-center gap-1">
+      <button onClick={onDec} className="grid h-6 w-6 place-items-center rounded border border-neutral-800 text-sm leading-none text-neutral-500 transition hover:border-neutral-600 hover:text-neutral-200 active:scale-90" aria-label="decrease">−</button>
+      <span className={`${wide ? 'w-8' : 'w-6'} text-center font-mono text-sm font-semibold tabular-nums ${value === 0 ? 'text-neutral-600' : tone}`}>{value}</span>
+      <button onClick={onInc} className="grid h-6 w-6 place-items-center rounded border border-neutral-800 text-sm leading-none text-neutral-500 transition hover:border-neutral-600 hover:text-neutral-200 active:scale-90" aria-label="increase">+</button>
+    </div>
+  );
+}
+
+// Section heading: small, uppercase, hairline rule. No decoration.
+function Section({ title, right, children, className = '' }) {
+  return (
+    <section className={className}>
+      <div className="mb-2 flex items-baseline justify-between gap-3 border-b border-neutral-800 pb-1.5">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">{title}</h2>
+        {right}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// A name you can hover for its rules text — dotted underline signals it.
+function HoverName({ title, desc, accent, className = '' }) {
+  return (
+    <Tip content={desc} title={title} accent={accent} className="inline-block cursor-help">
+      <span className={`border-b border-dotted border-neutral-700 transition hover:border-neutral-400 ${className}`}>{title}</span>
+    </Tip>
+  );
+}
+
+const TYPE_LABEL = {
+  Essential: 'text-neutral-300', Minor: 'text-neutral-400',
+  Intermediate: 'text-amber-400/80', Advanced: 'text-rose-400/80',
+};
+
+// ─────────────────────────── core kit table ───────────────────────────
+
+function CoreKitTable({ uses, onUse }) {
+  return (
+    <div className="overflow-hidden rounded border border-neutral-800">
+      <div className="grid grid-cols-[86px_84px_1fr] items-center gap-2 border-b border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+        <span>Used</span><span>Type</span><span>Ability</span>
+      </div>
+      {CORE_ACTIONS.map((k) => (
+        <div key={k.name + k.type} className="grid grid-cols-[86px_84px_1fr] items-center gap-2 border-b border-neutral-900 px-2.5 py-1.5 transition last:border-b-0 hover:bg-neutral-950">
+          <Stepper value={uses[k.name] || 0} tone="text-emerald-400" onDec={() => onUse(k.name, -1)} onInc={() => onUse(k.name, +1)} />
+          <span className={`text-[11px] ${TYPE_LABEL[k.type] || 'text-neutral-400'}`}>
+            {k.type === 'Intermediate' ? 'Int' : k.type}{k.tag && k.tag !== '-' ? ` (${k.tag})` : ''}
+          </span>
+          <HoverName title={k.name} desc={k.desc} className="text-sm font-medium text-neutral-100" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────── equipped school ───────────────────────────
+
+function SpellRow({ n, name, desc, aff, tier }) {
+  const st = AFF_STYLE[aff];
+  const tierTone = tier === 'adv' ? 'text-rose-300' : tier === 'int' ? 'text-amber-200' : 'text-neutral-100';
+  return (
+    <Tip content={desc} title={name} accent={st.text} className="block cursor-help">
+      <span className="flex items-center gap-2 rounded px-1.5 py-1 transition hover:bg-neutral-900">
+        <span className="w-3 shrink-0 font-mono text-[10px] text-neutral-600">{n ?? '·'}</span>
+        <span className={`truncate text-[13px] ${tierTone}`}>{name}</span>
       </span>
     </Tip>
   );
 }
 
-// Equipped-school panel for the Play tab — its own petal counter in the header.
-function EquippedPanel({ school, petals, onPetal, onRemove, onOpen }) {
+function TierLabel({ cost, children }) {
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5 px-1.5 text-[10px] uppercase tracking-wider text-neutral-600">
+      <span className="font-mono text-neutral-500">{cost}</span>{children}
+    </div>
+  );
+}
+
+function EquippedSchool({ school, petals, onPetal, onRemove, onOpen }) {
   const st = AFF_STYLE[school.affinity];
   return (
-    <div className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-stone-900/50 ${st.border} ${st.glow}`}>
-      {/* title */}
-      <div className={`flex items-start justify-between gap-2 border-b border-stone-800 bg-gradient-to-b ${st.grad} to-transparent px-3 pb-2 pt-2.5`}>
+    <div className="flex min-w-0 flex-col rounded border border-neutral-800 bg-neutral-950/40">
+      <div className="flex items-start justify-between gap-2 border-b border-neutral-800 px-2.5 py-2">
         <div className="min-w-0">
-          <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${st.text}`}>
-            <span className={`inline-block h-2 w-2 rounded-full ${st.dot}`} />{AFFINITIES[school.affinity].icon} {school.affinity}
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${st.dot}`} />
+            <span className={`text-[10px] font-semibold uppercase tracking-wider ${st.text}`}>{school.affinity}</span>
           </div>
-          <button onClick={() => onOpen(school)} className="block truncate text-left font-serif text-lg font-black leading-tight text-white hover:underline">{school.name}</button>
+          <button onClick={() => onOpen(school)} className="mt-0.5 block truncate text-left text-sm font-semibold text-neutral-50 hover:text-emerald-400">{school.name}</button>
         </div>
-        <button onClick={() => onRemove(school.id)} className="shrink-0 rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-500 transition hover:border-rose-500/50 hover:text-rose-300" title="Unequip">✕</button>
+        <button onClick={() => onRemove(school.id)} className="shrink-0 text-xs text-neutral-700 transition hover:text-rose-400" title="Unequip">✕</button>
       </div>
 
-      {/* petal counter for this affinity — right next to the spells */}
-      <div className={`flex items-center justify-between border-b border-stone-800 px-3 py-1.5 ${st.softBg}`}>
-        <span className={`text-[11px] font-bold uppercase tracking-wide ${st.text}`}>Petals</span>
-        <Stepper size="md" tone={st.text} value={petals} onDec={() => onPetal(-1)} onInc={() => onPetal(+1)} />
+      {/* petals for this affinity, right where its spells are */}
+      <div className="flex items-center justify-between border-b border-neutral-800 px-2.5 py-1.5">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500">Petals</span>
+        <Stepper value={petals} tone={st.text} onDec={() => onPetal(-1)} onInc={() => onPetal(+1)} />
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-2.5">
-        <div className="flex flex-wrap gap-1">
-          {school.traits.map((t, i) => (
-            <Tip key={i} content={t.desc} title={t.name} accent={st.text} className="cursor-help">
-              <span className={`rounded-md border border-stone-700/70 bg-stone-900/70 px-1.5 py-0.5 text-[10px] font-semibold ${TRAIT_ACCENT[t.type] || 'text-stone-300'}`}>
-                {t.type === 'Passive' ? '◆' : t.type === 'Debuff' ? '▼' : t.type === 'Buff' ? '▲' : '✦'} {t.name}
-              </span>
-            </Tip>
-          ))}
-        </div>
-
-        <div>
-          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-stone-500">
-            <span className={`rounded px-1 ${st.softBg} ${st.text}`}>1P</span> Minor · d{school.minorDie}
-          </div>
-          <div className="grid gap-1">{school.minors.map((s, i) => <SpellPill key={i} index={i + 1} name={s.name} desc={s.desc} level="Minor" aff={school.affinity} />)}</div>
-        </div>
-
-        {school.inters.length > 0 && (
-          <div>
-            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-stone-500">
-              <span className="rounded bg-amber-500/15 px-1 text-amber-300">2P</span> Inter · d{school.interDie}
-            </div>
-            <div className="grid gap-1">{school.inters.map((s, i) => <SpellPill key={i} index={i + 1} name={s.name} desc={s.desc} level="Inter" aff={school.affinity} />)}</div>
+      <div className="px-1 pb-2">
+        {school.traits.length > 0 && (
+          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 px-1.5 pt-1.5">
+            {school.traits.map((t, i) => (
+              <HoverName key={i} title={t.name} desc={t.desc} accent={st.text} className="text-[10px] text-neutral-500" />
+            ))}
           </div>
         )}
-
-        {school.advanced && (
-          <div>
-            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-stone-500">
-              <span className="rounded bg-rose-500/15 px-1 text-rose-300">4P</span> Advanced
-            </div>
-            <SpellPill name={school.advanced.name} desc={school.advanced.desc} level="Advanced" aff={school.affinity} />
-          </div>
-        )}
+        <TierLabel cost="1P">Minor · d{school.minorDie}</TierLabel>
+        {school.minors.map((s, i) => <SpellRow key={i} n={i + 1} name={s.name} desc={s.desc} aff={school.affinity} tier="min" />)}
+        {school.inters.length > 0 && <TierLabel cost="2P">Inter · d{school.interDie}</TierLabel>}
+        {school.inters.map((s, i) => <SpellRow key={i} n={i + 1} name={s.name} desc={s.desc} aff={school.affinity} tier="int" />)}
+        {school.advanced && <>
+          <TierLabel cost="4P">Advanced</TierLabel>
+          <SpellRow name={school.advanced.name} desc={school.advanced.desc} aff={school.affinity} tier="adv" />
+        </>}
       </div>
     </div>
   );
 }
 
-// ───────────────────────────── school detail modal ─────────────────────────────
-
-function LevelBadge({ level }) {
-  const map = {
-    Minor: 'bg-stone-700/60 text-stone-200 border-stone-500/50',
-    Inter: 'bg-amber-500/15 text-amber-200 border-amber-500/40',
-    Advanced: 'bg-rose-500/15 text-rose-200 border-rose-500/40',
-    Passive: 'bg-stone-800 text-stone-400 border-stone-600/50',
-    Debuff: 'bg-purple-500/15 text-purple-200 border-purple-500/40',
-    Buff: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40',
-    Summon: 'bg-sky-500/15 text-sky-200 border-sky-500/40',
-  };
-  return <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${map[level] || map.Passive}`}>{level}</span>;
-}
+// ─────────────────────────── school detail modal ───────────────────────────
 
 function DetailRow({ level, name, desc, cost }) {
   return (
-    <div className="flex gap-2.5 rounded-lg border border-stone-800 bg-stone-900/50 p-2.5">
-      <div className="flex flex-col items-center gap-1 pt-0.5">
-        <LevelBadge level={level} />
-        {cost && <span className="font-mono text-[10px] text-stone-500">{cost}</span>}
+    <div className="border-b border-neutral-900 py-2 last:border-b-0">
+      <div className="flex items-baseline gap-2">
+        <span className="w-14 shrink-0 font-mono text-[10px] uppercase text-neutral-600">{cost || level}</span>
+        <span className="text-sm font-medium text-neutral-100">{name}</span>
       </div>
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-stone-100">{name}</div>
-        <div className="text-xs leading-relaxed text-stone-400">{desc}</div>
-      </div>
+      <p className="ml-16 mt-0.5 text-xs leading-relaxed text-neutral-400">{desc}</p>
     </div>
   );
 }
@@ -168,49 +165,37 @@ function DetailRow({ level, name, desc, cost }) {
 function SchoolDetail({ school, onClose, inLoadout, canAdd, blockReason, onToggle }) {
   const st = AFF_STYLE[school.affinity];
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6" onClick={onClose}>
-      <div className={`flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border bg-stone-950 sm:rounded-3xl ${st.border} ${st.glow}`} onClick={(e) => e.stopPropagation()}>
-        <div className={`flex items-start justify-between gap-3 border-b border-stone-800 bg-gradient-to-b ${st.grad} to-transparent p-4`}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-0 backdrop-blur-sm sm:items-center sm:p-6" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-lg border border-neutral-800 bg-black sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 border-b border-neutral-800 p-4">
           <div>
-            <div className={`mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${st.text}`}><span>{AFFINITIES[school.affinity].icon}</span>{school.affinity} Affinity</div>
-            <h3 className="font-serif text-2xl font-black text-white">{school.name}</h3>
-            <div className="mt-1 text-xs text-stone-400">
-              Minor: 1 Petal · roll d{school.minorDie}
-              {school.interDie > 0 && <> &nbsp;·&nbsp; Inter: 2 Petals · roll d{school.interDie}</>}
-              {school.advanced && <> &nbsp;·&nbsp; Advanced: 4 Petals · locked</>}
+            <div className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider ${st.text}`}>
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${st.dot}`} />{school.affinity} Affinity
+            </div>
+            <h3 className="mt-1 text-xl font-semibold text-neutral-50">{school.name}</h3>
+            <div className="mt-1 font-mono text-[11px] text-neutral-500">
+              1P Minor d{school.minorDie}
+              {school.interDie > 0 && ` · 2P Inter d${school.interDie}`}
+              {school.advanced && ' · 4P Advanced'}
             </div>
           </div>
-          <button onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-stone-700 bg-stone-800 text-stone-300 transition hover:text-white">✕</button>
+          <button onClick={onClose} className="shrink-0 text-neutral-600 transition hover:text-neutral-200">✕</button>
         </div>
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {school.note && <div className={`rounded-lg border px-3 py-2 text-xs ${st.chip}`}>{school.note}</div>}
-          {school.traits.map((t, i) => <DetailRow key={`t${i}`} level={t.type} name={t.name} desc={t.desc} />)}
-          {school.minors.length > 0 && (
-            <div>
-              <div className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-stone-500">Minors · 1 Petal</div>
-              <div className="space-y-2">{school.minors.map((s, i) => <DetailRow key={i} level="Minor" name={s.name} desc={s.desc} cost={`d${school.minorDie}:${i + 1}`} />)}</div>
-            </div>
-          )}
-          {school.inters.length > 0 && (
-            <div>
-              <div className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-stone-500">Intermediates · 2 Petals</div>
-              <div className="space-y-2">{school.inters.map((s, i) => <DetailRow key={i} level="Inter" name={s.name} desc={s.desc} cost={`d${school.interDie}:${i + 1}`} />)}</div>
-            </div>
-          )}
-          {school.advanced && (
-            <div>
-              <div className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-stone-500">Advanced · 4 Petals</div>
-              <DetailRow level="Advanced" name={school.advanced.name} desc={school.advanced.desc} />
-            </div>
-          )}
+        <div className="flex-1 overflow-y-auto px-4">
+          {school.note && <p className="mt-3 rounded border border-neutral-800 px-3 py-2 text-xs text-neutral-400">{school.note}</p>}
+          {school.traits.map((t, i) => <DetailRow key={`t${i}`} cost={t.type} name={t.name} desc={t.desc} />)}
+          {school.minors.map((s, i) => <DetailRow key={`m${i}`} cost={`1P · ${i + 1}`} name={s.name} desc={s.desc} />)}
+          {school.inters.map((s, i) => <DetailRow key={`i${i}`} cost={`2P · ${i + 1}`} name={s.name} desc={s.desc} />)}
+          {school.advanced && <DetailRow cost="4P" name={school.advanced.name} desc={school.advanced.desc} />}
         </div>
-        <div className="border-t border-stone-800 p-3">
+        <div className="border-t border-neutral-800 p-3">
           <button onClick={() => onToggle(school.id)} disabled={!inLoadout && !canAdd}
-            className={`w-full rounded-xl px-4 py-2.5 text-sm font-bold transition ${
-              inLoadout ? 'border border-rose-500/50 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
-                : canAdd ? `${st.solid} text-stone-950 hover:brightness-110`
-                : 'cursor-not-allowed border border-stone-800 bg-stone-900 text-stone-600'}`}>
-            {inLoadout ? 'Remove from Loadout' : canAdd ? 'Add to Loadout' : blockReason === 'full' ? 'Loadout full (4 schools)' : `${school.affinity} slot already taken`}
+            className={`w-full rounded px-4 py-2 text-sm font-semibold transition ${
+              inLoadout ? 'border border-neutral-700 text-neutral-300 hover:border-rose-500/60 hover:text-rose-300'
+                : canAdd ? 'bg-emerald-500 text-black hover:bg-emerald-400'
+                : 'cursor-not-allowed border border-neutral-900 text-neutral-700'}`}>
+            {inLoadout ? 'Remove from loadout' : canAdd ? 'Add to loadout'
+              : blockReason === 'full' ? 'Loadout full — remove one first' : `${school.affinity} slot taken`}
           </button>
         </div>
       </div>
@@ -218,27 +203,23 @@ function SchoolDetail({ school, onClose, inLoadout, canAdd, blockReason, onToggl
   );
 }
 
-// ───────────────────────────── schools browser row ─────────────────────────────
+// ─────────────────────────── schools browser ───────────────────────────
 
 function BrowseRow({ school, inLoadout, disabled, reason, onOpen, onToggle }) {
   const st = AFF_STYLE[school.affinity];
   return (
-    <div className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition ${
-      inLoadout ? `${st.border} ${st.softBg}` : `border-stone-800 bg-stone-900/40 ${!disabled ? st.hover : ''}`
-    } ${disabled && !inLoadout ? 'opacity-40' : ''}`}>
-      <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${st.dot}`} />
-      <Tip content={school.traits[0]?.desc} title={`${school.traits[0]?.name} · passive`} accent={st.text} className="min-w-0 flex-1 cursor-help">
-        <button onClick={() => onOpen(school)} className="block w-full min-w-0 text-left">
-          <span className="truncate font-serif text-sm font-bold text-white">{school.name}</span>
-          <span className="ml-1.5 text-[10px] text-stone-500">{school.minors.length + school.inters.length + (school.advanced ? 1 : 0)} · d{school.minorDie}{school.interDie ? `/d${school.interDie}` : ''}</span>
-        </button>
-      </Tip>
+    <div className={`flex items-center gap-2 border-b border-neutral-900 py-1.5 pl-1 pr-1 transition hover:bg-neutral-950 ${disabled && !inLoadout ? 'opacity-40' : ''}`}>
+      <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
+      <button onClick={() => onOpen(school)} className="min-w-0 flex-1 truncate text-left">
+        <span className={`text-[13px] ${inLoadout ? 'font-semibold text-emerald-400' : 'text-neutral-200'} hover:underline`}>{school.name}</span>
+        <span className="ml-1.5 font-mono text-[10px] text-neutral-600">d{school.minorDie}{school.interDie ? `/d${school.interDie}` : ''}</span>
+      </button>
       <button onClick={() => onToggle(school.id)} disabled={disabled && !inLoadout}
-        className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-bold transition ${
-          inLoadout ? 'border border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-            : disabled ? 'cursor-not-allowed border border-stone-800 text-stone-600'
-            : `${st.chip} hover:brightness-125`}`}>
-        {inLoadout ? '−' : disabled ? (reason === 'full' ? 'Full' : 'Taken') : '+ Add'}
+        className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] transition ${
+          inLoadout ? 'border border-neutral-700 text-neutral-400 hover:border-rose-500/60 hover:text-rose-300'
+            : disabled ? 'cursor-not-allowed text-neutral-700'
+            : 'border border-neutral-700 text-neutral-300 hover:border-emerald-500 hover:text-emerald-400'}`}>
+        {inLoadout ? 'Remove' : disabled ? (reason === 'full' ? 'Full' : 'Taken') : 'Add'}
       </button>
     </div>
   );
@@ -246,26 +227,21 @@ function BrowseRow({ school, inLoadout, disabled, reason, onOpen, onToggle }) {
 
 function LoadoutRow({ entry, onApply, onDelete }) {
   const ids = entry.schools.map((s) => (SCHOOL_BY_ID[s] ? s : SCHOOL_BY_NAME[s]?.id)).filter(Boolean);
-  const schools = ids.map((id) => SCHOOL_BY_ID[id]);
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900/50 p-2">
+    <div className="flex items-center gap-2 border-b border-neutral-900 py-1.5">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-semibold text-stone-200">{entry.name}</div>
-        <div className="mt-0.5 flex flex-wrap gap-1">{schools.map((s) => <span key={s.id} className={`rounded px-1 py-0.5 text-[9px] ${AFF_STYLE[s.affinity].chip}`}>{s.name}</span>)}</div>
+        <div className="truncate text-[12px] text-neutral-300">{entry.name}</div>
+        <div className="truncate text-[10px] text-neutral-600">{ids.map((id) => SCHOOL_BY_ID[id].name).join(' · ')}</div>
       </div>
-      <button onClick={() => onApply(ids)} className="shrink-0 rounded-md bg-emerald-500 px-2 py-1 text-[11px] font-bold text-stone-950 hover:brightness-110">Load</button>
-      {onDelete && <button onClick={onDelete} className="shrink-0 rounded-md border border-stone-700 px-1.5 py-1 text-[11px] text-stone-500 hover:border-rose-500/50 hover:text-rose-300">✕</button>}
+      <button onClick={() => onApply(ids)} className="shrink-0 rounded border border-neutral-700 px-2 py-0.5 text-[11px] text-neutral-300 transition hover:border-emerald-500 hover:text-emerald-400">Load</button>
+      {onDelete && <button onClick={onDelete} className="shrink-0 text-[11px] text-neutral-700 hover:text-rose-400">✕</button>}
     </div>
   );
 }
 
-const TABS = [
-  { id: 'play', label: 'Play', icon: '🎲' },
-  { id: 'schools', label: 'Schools', icon: '📖' },
-  { id: 'reference', label: 'Reference', icon: '📜' },
-];
+const TABS = [{ id: 'play', label: 'Play' }, { id: 'schools', label: 'Schools' }, { id: 'reference', label: 'Reference' }];
 
-// ───────────────────────────── main ─────────────────────────────
+// ─────────────────────────── main ───────────────────────────
 
 export default function CharacterSheet({ onBack }) {
   const gil = useGilSheet();
@@ -279,305 +255,323 @@ export default function CharacterSheet({ onBack }) {
   const loadoutSchools = state.loadout.map((id) => SCHOOL_BY_ID[id]).filter(Boolean);
   const usedAffinities = new Set(loadoutSchools.map((s) => s.affinity));
   const looseAffinities = AFFINITY_ORDER.filter((a) => !usedAffinities.has(a));
-  const groupedSchools = useMemo(() => {
-    const order = affFilter === 'All' ? AFFINITY_ORDER : [affFilter];
-    return order.map((a) => ({ affinity: a, schools: SCHOOLS.filter((s) => s.affinity === a) }));
-  }, [affFilter]);
-  const activeStat = (s) => (state.ardenvale ? s.ardenvale : s.base);
+  const grouped = useMemo(() => (affFilter === 'All' ? AFFINITY_ORDER : [affFilter])
+    .map((a) => ({ affinity: a, schools: SCHOOLS.filter((s) => s.affinity === a) })), [affFilter]);
+  const statValue = (s) => (state.ardenvale ? s.ardenvale : s.base);
+  const hp = state.vitals.hp;
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-200">
-      <div className="pointer-events-none fixed left-[-10%] top-[-15%] h-[45%] w-[45%] rounded-full bg-emerald-900/10 blur-[150px]" />
-      <div className="pointer-events-none fixed bottom-[-15%] right-[-10%] h-[50%] w-[50%] rounded-full bg-emerald-900/[0.07] blur-[150px]" />
-
+    <div className="min-h-screen bg-black text-neutral-300">
       {/* top bar */}
-      <nav className="sticky top-0 z-30 flex items-center gap-2 border-b border-stone-800 bg-stone-950/90 px-3 py-2 backdrop-blur">
-        <button onClick={onBack} className="rounded-lg border border-stone-700 bg-stone-900/80 px-2.5 py-1.5 text-xs font-semibold text-stone-300 transition hover:border-emerald-400 hover:text-emerald-300">← Back</button>
-        <div className="flex gap-1">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-neutral-800 bg-black px-3 py-2">
+        <button onClick={onBack} className="rounded border border-neutral-800 px-2.5 py-1 text-xs text-neutral-400 transition hover:border-neutral-600 hover:text-neutral-100">← Back</button>
+        <div className="flex gap-0.5">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${tab === t.id ? 'bg-emerald-500 text-stone-950' : 'text-stone-400 hover:bg-stone-800 hover:text-stone-200'}`}>
-              <span>{t.icon}</span>{t.label}
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`rounded px-3 py-1 text-[13px] transition ${tab === t.id ? 'bg-neutral-100 font-semibold text-black' : 'text-neutral-500 hover:text-neutral-200'}`}>
+              {t.label}
             </button>
           ))}
         </div>
         <div className="flex-1" />
-        <button onClick={gil.toggleArdenvale} className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${state.ardenvale ? 'border-amber-400/60 bg-amber-500/15 text-amber-300 shadow-[0_0_18px_-6px_rgba(251,191,36,0.6)]' : 'border-stone-700 bg-stone-900/60 text-stone-400 hover:border-stone-500'}`} title="Toggle Ardenvale (Champion bonus)">
-          {state.ardenvale ? '🌟 Ardenvale' : '🌙 Base'}
-        </button>
-      </nav>
+        <Tip content="Champion of the Ardenvale: while in the Ardenvale, Damage / Accuracy / Defense become 10 / 10 / 20." title="Ardenvale" accent="text-emerald-400" className="cursor-help">
+          <button onClick={gil.toggleArdenvale}
+            className={`rounded border px-2.5 py-1 text-xs transition ${state.ardenvale ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-neutral-800 text-neutral-500 hover:border-neutral-600'}`}>
+            {state.ardenvale ? 'Ardenvale ON' : 'Ardenvale OFF'}
+          </button>
+        </Tip>
+        <button onClick={gil.resetTrackers} className="rounded border border-neutral-800 px-2.5 py-1 text-xs text-neutral-500 transition hover:border-neutral-600 hover:text-neutral-200">New fight</button>
+      </header>
 
-      <div className="relative mx-auto max-w-[1600px] p-3 sm:p-4">
-        {/* ═══════════════ PLAY ═══════════════ */}
+      <main className="mx-auto max-w-[1500px] px-3 py-4 sm:px-4">
+        {/* ═══════════ PLAY ═══════════ */}
         {tab === 'play' && (
-          <div className="space-y-4">
-            {/* identity + stats */}
-            <section className="overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.08] via-stone-900/40 to-stone-900/40">
-              <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
-                <div className="flex items-center gap-4">
-                  <div className="relative shrink-0">
-                    <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-br from-emerald-500/50 to-emerald-700/20 blur-md" />
-                    <img src={assetUrl(IDENTITY.image)} alt={IDENTITY.fullName} className="relative h-24 w-24 rounded-2xl border-2 border-emerald-500/50 object-cover object-top shadow-xl sm:h-28 sm:w-28" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300">{IDENTITY.title}</div>
-                    <h1 className="bg-gradient-to-br from-white to-emerald-300 bg-clip-text font-serif text-4xl font-black leading-none text-transparent sm:text-5xl">{IDENTITY.name}</h1>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="rounded-full border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-200">🌑 {IDENTITY.affinity}</span>
-                      <span className="rounded-full border border-fuchsia-500/40 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-200">⚠ Weak: {IDENTITY.weakness}</span>
-                      {IDENTITY.phases.map((p) => <span key={p} className="rounded-full border border-stone-700 bg-stone-800/50 px-2 py-0.5 text-[10px] text-stone-400">{p}</span>)}
+          <div className="grid gap-5 lg:grid-cols-[248px_1fr]">
+            {/* left rail — trackers */}
+            <aside className="space-y-5 lg:sticky lg:top-14 lg:self-start">
+              {/* identity */}
+              <div className="flex items-center gap-3">
+                <img src={assetUrl(IDENTITY.image)} alt={IDENTITY.fullName} className="h-24 w-24 shrink-0 rounded border border-neutral-800 object-cover object-top" />
+                <div className="min-w-0">
+                  <h1 className="text-2xl font-semibold leading-none text-neutral-50">{IDENTITY.name}</h1>
+                  <p className="mt-1 text-[11px] leading-tight text-neutral-500">{IDENTITY.title}</p>
+                  <p className="mt-1.5 text-[11px] text-neutral-400">
+                    <span className="text-violet-400">Shadow</span> · weak to <span className="text-fuchsia-400">Spirit</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* stats */}
+              <Section title="Stats">
+                <div className="rounded border border-neutral-800">
+                  {/* HP is the one you actually change mid-fight */}
+                  <div className="flex items-center justify-between border-b border-neutral-900 px-2.5 py-1.5">
+                    <span className="text-[12px] text-neutral-400">Health</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number" value={hp}
+                        onChange={(e) => gil.setCounter('vitals', 'hp', Number(e.target.value))}
+                        className="w-12 rounded border border-neutral-800 bg-black px-1 py-0.5 text-right font-mono text-sm font-semibold tabular-nums text-emerald-400 outline-none focus:border-emerald-500"
+                      />
+                      <span className="font-mono text-[11px] text-neutral-600">/ {MAX_HP}</span>
                     </div>
                   </div>
-                </div>
-                <div className="flex-1" />
-                {/* stats */}
-                <div className="grid grid-cols-5 gap-2">
-                  {STATS.map((s) => {
+                  {STATS.filter((s) => s.key !== 'health').map((s) => {
                     const boosted = state.ardenvale && s.ardenvale !== s.base;
                     return (
-                      <Tip key={s.key} content={boosted ? `Base ${s.base} → Ardenvale ${s.ardenvale}` : 'Base value'} title={s.label} className="cursor-help">
-                        <div className={`min-w-[54px] rounded-xl border px-2 py-1.5 text-center ${boosted ? 'border-amber-500/40 bg-amber-500/10' : 'border-stone-700/70 bg-stone-900/50'}`}>
-                          <div className="text-[9px] font-bold uppercase leading-tight text-stone-500">{s.label.replace(' (DM)', '')}</div>
-                          <div className={`font-mono text-2xl font-black tabular-nums ${boosted ? 'text-amber-300' : 'text-stone-100'}`}>{activeStat(s)}</div>
-                        </div>
-                      </Tip>
+                      <div key={s.key} className="flex items-center justify-between border-b border-neutral-900 px-2.5 py-1.5 last:border-b-0">
+                        <span className="text-[12px] text-neutral-400">{s.label}</span>
+                        <span className={`font-mono text-sm font-semibold tabular-nums ${boosted ? 'text-emerald-400' : 'text-neutral-200'}`}>{statValue(s)}</span>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
-            </section>
+              </Section>
 
-            {/* bursts + loose petals */}
-            <section className="grid gap-3 lg:grid-cols-[1fr_auto]">
-              <div className="rounded-2xl border border-stone-800 bg-stone-900/40 p-3">
-                <SectionHeader right={<button onClick={gil.resetTrackers} className="rounded-md border border-stone-800 px-2 py-1 text-[10px] text-stone-500 transition hover:border-rose-500/40 hover:text-rose-300">Reset for new fight</button>}>Bursts / Tokens</SectionHeader>
-                <div className="grid grid-cols-5 gap-2">
+              {/* tokens */}
+              <Section title="Tokens">
+                <div className="rounded border border-neutral-800">
                   {BURSTS.map((b) => (
-                    <div key={b.key} className="flex flex-col items-center gap-1 rounded-xl border border-stone-800 bg-stone-950/50 px-2 py-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400">{b.label}</span>
-                      <Stepper size="lg" tone="text-sky-300" value={state.bursts[b.key]} onDec={() => gil.bump('bursts', b.key, -1)} onInc={() => gil.bump('bursts', b.key, +1)} />
+                    <div key={b.key} className="flex items-center justify-between border-b border-neutral-900 px-2.5 py-1 last:border-b-0">
+                      <span className="text-[12px] text-neutral-400">{b.label}</span>
+                      <Stepper value={state.bursts[b.key]} tone="text-sky-400" onDec={() => gil.bump('bursts', b.key, -1)} onInc={() => gil.bump('bursts', b.key, +1)} />
                     </div>
                   ))}
                 </div>
-              </div>
+              </Section>
+
+              {/* flowers */}
+              <Section title="Flowers" right={<span className="text-[10px] text-neutral-600">bloom 86+</span>}>
+                <div className="rounded border border-neutral-800">
+                  {FLOWERS.map((f) => (
+                    <div key={f.name} className="flex items-center justify-between border-b border-neutral-900 px-2.5 py-1 last:border-b-0">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-neutral-700" style={{ backgroundColor: FLOWER_HEX[f.name] }} />
+                        <HoverName title={f.name} desc={f.desc} className="text-[12px] text-neutral-400" />
+                      </span>
+                      <Stepper value={state.flowers[f.name] ?? 0} tone="text-neutral-100" onDec={() => gil.bump('flowers', f.name, -1)} onInc={() => gil.bump('flowers', f.name, +1)} />
+                    </div>
+                  ))}
+                </div>
+              </Section>
+
+              {/* petals not covered by an equipped school */}
               {looseAffinities.length > 0 && (
-                <div className="rounded-2xl border border-stone-800 bg-stone-900/40 p-3">
-                  <SectionHeader>Loose Petals</SectionHeader>
-                  <div className="flex gap-2">
+                <Section title="Other Petals">
+                  <div className="rounded border border-neutral-800">
                     {looseAffinities.map((a) => (
-                      <div key={a} className="flex flex-col items-center gap-1 rounded-xl border border-stone-800 bg-stone-950/50 px-2 py-2">
-                        <span className={`flex items-center gap-1 text-[10px] font-bold uppercase ${AFF_STYLE[a].text}`}><span className={`inline-block h-1.5 w-1.5 rounded-full ${AFF_STYLE[a].dot}`} />{a}</span>
-                        <Stepper size="lg" tone={AFF_STYLE[a].text} value={state.petals[a]} onDec={() => gil.bump('petals', a, -1)} onInc={() => gil.bump('petals', a, +1)} />
+                      <div key={a} className="flex items-center justify-between border-b border-neutral-900 px-2.5 py-1 last:border-b-0">
+                        <span className="flex items-center gap-1.5">
+                          <span className={`inline-block h-1.5 w-1.5 rounded-full ${AFF_STYLE[a].dot}`} />
+                          <span className="text-[12px] text-neutral-400">{a}</span>
+                        </span>
+                        <Stepper value={state.petals[a]} tone={AFF_STYLE[a].text} onDec={() => gil.bump('petals', a, -1)} onInc={() => gil.bump('petals', a, +1)} />
                       </div>
                     ))}
                   </div>
-                </div>
+                </Section>
               )}
-            </section>
+            </aside>
 
-            {/* signature kit */}
-            <section>
-              <SectionHeader right={<span className="text-[10px] text-stone-600">hover for full text</span>}>Signature Kit</SectionHeader>
-              <div className="flex flex-wrap gap-1.5">
-                {CORE_ACTIONS.map((k, i) => (
-                  <Tip key={i} content={k.desc} title={`${k.name} · ${k.type}${k.tag ? ` (${k.tag})` : ''}`} className="cursor-help">
-                    <span className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.07] px-2.5 py-1.5 text-sm font-semibold text-stone-50 transition hover:border-emerald-400/60 hover:bg-emerald-500/15">{k.name}</span>
-                  </Tip>
-                ))}
-                {CORE_PASSIVES.map((k, i) => (
-                  <Tip key={i} content={k.desc} title={`${k.name} · ${k.type}`} className="cursor-help">
-                    <span className="rounded-lg border border-stone-800 bg-stone-900/50 px-2 py-1.5 text-xs text-stone-400 transition hover:border-stone-600 hover:text-stone-200">◆ {k.name}</span>
-                  </Tip>
-                ))}
-              </div>
-            </section>
-
-            {/* equipped schools — the focus */}
-            <section>
-              <SectionHeader right={
-                <div className="flex items-center gap-2">
-                  <span className={`font-mono text-xs font-bold ${state.loadout.length === 4 ? 'text-emerald-400' : 'text-stone-500'}`}>{state.loadout.length}/4</span>
-                  <button onClick={() => setTab('schools')} className="rounded-md border border-stone-700 px-2.5 py-1 text-[11px] font-semibold text-stone-300 transition hover:border-emerald-400 hover:text-emerald-300">Manage schools</button>
-                </div>
-              }>Equipped Spells</SectionHeader>
-
-              {loadoutSchools.length === 0 ? (
-                <button onClick={() => setTab('schools')} className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-800 bg-stone-900/30 py-12 text-sm text-stone-500 transition hover:border-emerald-600/50 hover:text-emerald-300">
-                  <span className="mb-1 text-3xl">📖</span>No schools equipped — pick 4 (one per affinity)
-                </button>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {loadoutSchools.map((s) => (
-                    <EquippedPanel key={s.id} school={s} petals={state.petals[s.affinity]} onPetal={(d) => gil.bump('petals', s.affinity, d)} onRemove={gil.toggleSchool} onOpen={setDetail} />
+            {/* right — kit and spells */}
+            <div className="min-w-0 space-y-5">
+              <Section title="Core Kit" right={<span className="text-[10px] text-neutral-600">hover a name for its rules</span>}>
+                <CoreKitTable uses={state.uses} onUse={(name, d) => gil.bump('uses', name, d)} />
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                  {CORE_PASSIVES.map((k) => (
+                    <HoverName key={k.name} title={k.name} desc={k.desc} className="text-[11px] text-neutral-500" />
                   ))}
-                  {loadoutSchools.length < 4 && (
-                    <button onClick={() => setTab('schools')} className="flex min-h-[160px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-800 bg-stone-900/20 text-xs text-stone-600 transition hover:border-emerald-600/50 hover:text-emerald-300">+ Add school</button>
-                  )}
                 </div>
-              )}
-            </section>
+              </Section>
+
+              <Section title="Equipped Schools" right={
+                <span className="flex items-center gap-2">
+                  <span className={`font-mono text-[11px] ${state.loadout.length === 4 ? 'text-emerald-400' : 'text-neutral-600'}`}>{state.loadout.length}/4</span>
+                  <button onClick={() => setTab('schools')} className="text-[11px] text-neutral-500 underline-offset-2 transition hover:text-emerald-400 hover:underline">manage</button>
+                </span>
+              }>
+                {loadoutSchools.length === 0 ? (
+                  <button onClick={() => setTab('schools')} className="w-full rounded border border-dashed border-neutral-800 py-10 text-xs text-neutral-600 transition hover:border-neutral-600 hover:text-neutral-400">
+                    No schools equipped — pick 4, one per affinity
+                  </button>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {loadoutSchools.map((s) => (
+                      <EquippedSchool key={s.id} school={s} petals={state.petals[s.affinity]}
+                        onPetal={(d) => gil.bump('petals', s.affinity, d)} onRemove={gil.toggleSchool} onOpen={setDetail} />
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Blessed Items">
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {BLESSED_ITEMS.map((it) => (
+                    <HoverName key={it.name} title={it.name} desc={it.desc} accent="text-amber-300" className="text-[13px] text-amber-200/90" />
+                  ))}
+                </div>
+              </Section>
+            </div>
           </div>
         )}
 
-        {/* ═══════════════ SCHOOLS ═══════════════ */}
+        {/* ═══════════ SCHOOLS ═══════════ */}
         {tab === 'schools' && (
-          <div className="space-y-4">
-            {/* active loadout — compact */}
-            <section className="rounded-2xl border border-stone-800 bg-stone-900/40 p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <SectionHeader>Active Loadout <span className="ml-1 text-[10px] font-normal normal-case tracking-normal text-stone-500">4 schools · one per affinity</span></SectionHeader>
-                <div className="flex items-center gap-2">
-                  <span className={`font-mono text-xs font-bold ${state.loadout.length === 4 ? 'text-emerald-400' : 'text-stone-500'}`}>{state.loadout.length}/4</span>
-                  {state.loadout.length > 0 && <button onClick={gil.clearLoadout} className="rounded-md border border-stone-700 px-2 py-1 text-[11px] text-stone-400 hover:border-rose-500/50 hover:text-rose-300">Clear</button>}
-                  <button onClick={() => setShowLoadouts((v) => !v)} className="rounded-md border border-stone-700 px-2 py-1 text-[11px] font-semibold text-stone-300 hover:border-emerald-400 hover:text-emerald-300">Saved loadouts {showLoadouts ? '▴' : '▾'}</button>
-                </div>
-              </div>
+          <div className="space-y-5">
+            <Section title="Active Loadout" right={
+              <span className="flex items-center gap-2">
+                <span className={`font-mono text-[11px] ${state.loadout.length === 4 ? 'text-emerald-400' : 'text-neutral-600'}`}>{state.loadout.length}/4</span>
+                {state.loadout.length > 0 && <button onClick={gil.clearLoadout} className="text-[11px] text-neutral-500 hover:text-rose-400">clear</button>}
+                <button onClick={() => setShowLoadouts((v) => !v)} className="text-[11px] text-neutral-500 hover:text-emerald-400">saved {showLoadouts ? '▴' : '▾'}</button>
+              </span>
+            }>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[0, 1, 2, 3].map((i) => {
                   const s = loadoutSchools[i];
-                  if (!s) return <div key={i} className="flex min-h-[56px] items-center justify-center rounded-lg border-2 border-dashed border-stone-800 bg-stone-900/30 text-[11px] text-stone-600">Empty</div>;
+                  if (!s) return <div key={i} className="rounded border border-dashed border-neutral-800 px-2.5 py-2 text-[11px] text-neutral-700">Empty</div>;
                   const st = AFF_STYLE[s.affinity];
                   return (
-                    <div key={i} className={`relative min-h-[56px] rounded-lg border bg-gradient-to-br ${st.grad} to-stone-900/40 p-2 ${st.border}`}>
-                      <button onClick={() => gil.toggleSchool(s.id)} className="absolute right-1.5 top-1 text-stone-500 hover:text-rose-300">✕</button>
-                      <div className={`flex items-center gap-1 text-[9px] font-bold uppercase ${st.text}`}>{AFFINITIES[s.affinity].icon} {s.affinity}</div>
-                      <button onClick={() => setDetail(s)} className="mt-0.5 block truncate text-left font-serif text-sm font-bold leading-tight text-white hover:underline">{s.name}</button>
+                    <div key={i} className="flex items-start justify-between gap-1 rounded border border-neutral-800 px-2.5 py-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`inline-block h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                          <span className={`text-[10px] uppercase tracking-wider ${st.text}`}>{s.affinity}</span>
+                        </div>
+                        <button onClick={() => setDetail(s)} className="mt-0.5 block truncate text-left text-[13px] text-neutral-100 hover:text-emerald-400">{s.name}</button>
+                      </div>
+                      <button onClick={() => gil.toggleSchool(s.id)} className="shrink-0 text-xs text-neutral-700 hover:text-rose-400">✕</button>
                     </div>
                   );
                 })}
               </div>
               <div className="mt-2 flex gap-2">
-                <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this loadout to save…" className="min-w-0 flex-1 rounded-lg border border-stone-700 bg-stone-900/60 px-3 py-1.5 text-sm text-stone-100 placeholder-stone-600 outline-none focus:border-emerald-400" />
-                <button onClick={() => { gil.saveCurrentLoadout(saveName); setSaveName(''); setShowLoadouts(true); }} disabled={!state.loadout.length} className="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-bold text-stone-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-stone-800 disabled:text-stone-600">Save</button>
+                <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this loadout…"
+                  className="min-w-0 flex-1 rounded border border-neutral-800 bg-black px-2.5 py-1.5 text-[13px] text-neutral-200 placeholder-neutral-700 outline-none focus:border-emerald-500" />
+                <button onClick={() => { gil.saveCurrentLoadout(saveName); setSaveName(''); setShowLoadouts(true); }} disabled={!state.loadout.length}
+                  className="rounded bg-emerald-500 px-3 py-1.5 text-[13px] font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-neutral-900 disabled:text-neutral-700">Save</button>
               </div>
-
               {showLoadouts && (
-                <div className="mt-3 grid gap-3 border-t border-stone-800 pt-3 lg:grid-cols-2">
+                <div className="mt-3 grid gap-x-6 border-t border-neutral-800 pt-2 lg:grid-cols-2">
                   <div>
-                    <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-stone-500">My Saved</h3>
-                    {state.saved.length ? <div className="space-y-1.5">{state.saved.map((sv) => <LoadoutRow key={sv.id} entry={sv} onApply={gil.applyLoadout} onDelete={() => gil.deleteSaved(sv.id)} />)}</div> : <p className="text-[11px] text-stone-600">Nothing saved yet.</p>}
+                    <div className="mb-1 text-[10px] uppercase tracking-wider text-neutral-600">Mine</div>
+                    {state.saved.length ? state.saved.map((sv) => <LoadoutRow key={sv.id} entry={sv} onApply={gil.applyLoadout} onDelete={() => gil.deleteSaved(sv.id)} />)
+                      : <p className="text-[11px] text-neutral-700">Nothing saved yet.</p>}
                   </div>
                   <div>
-                    <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-stone-500">Past (old sheets)</h3>
-                    <div className="max-h-52 space-y-1.5 overflow-y-auto pr-1">{PAST_LOADOUTS.map((sv) => <LoadoutRow key={sv.name} entry={sv} onApply={gil.applyLoadout} />)}</div>
+                    <div className="mb-1 text-[10px] uppercase tracking-wider text-neutral-600">Past fights</div>
+                    <div className="max-h-48 overflow-y-auto pr-1">{PAST_LOADOUTS.map((sv) => <LoadoutRow key={sv.name} entry={sv} onApply={gil.applyLoadout} />)}</div>
                   </div>
                 </div>
               )}
-            </section>
+            </Section>
 
-            {/* full school browser — the priority */}
-            <section>
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <SectionHeader>All Spell Schools <span className="ml-1 text-[10px] font-normal normal-case tracking-normal text-stone-500">({SCHOOLS.length}) · click a name for full details</span></SectionHeader>
-                <div className="flex-1" />
-                <div className="flex flex-wrap gap-1">
-                  {['All', ...AFFINITY_ORDER].map((a) => {
-                    const on = affFilter === a;
-                    const st = a !== 'All' ? AFF_STYLE[a] : null;
-                    return <button key={a} onClick={() => setAffFilter(a)} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${on ? (a === 'All' ? 'bg-emerald-500 text-stone-950' : `${st.solid} text-stone-950`) : 'border border-stone-700 text-stone-400 hover:border-stone-500 hover:text-stone-200'}`}>{a === 'All' ? 'All' : `${AFFINITIES[a].icon} ${a}`}</button>;
-                  })}
-                </div>
+            <Section title={`All Spell Schools · ${SCHOOLS.length}`} right={
+              <div className="flex flex-wrap gap-1">
+                {['All', ...AFFINITY_ORDER].map((a) => (
+                  <button key={a} onClick={() => setAffFilter(a)}
+                    className={`rounded px-2 py-0.5 text-[11px] transition ${affFilter === a ? 'bg-neutral-100 font-semibold text-black' : 'text-neutral-500 hover:text-neutral-200'}`}>{a}</button>
+                ))}
               </div>
-              <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
-                {groupedSchools.map((grp) => (
-                  <div key={grp.affinity} className="min-w-0">
-                    <div className={`mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${AFF_STYLE[grp.affinity].text}`}>
-                      <span className={`inline-block h-2 w-2 rounded-full ${AFF_STYLE[grp.affinity].dot}`} />{AFFINITIES[grp.affinity].icon} {grp.affinity} <span className="font-normal text-stone-600">({grp.schools.length})</span>
+            }>
+              <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
+                {grouped.map((g) => (
+                  <div key={g.affinity} className="min-w-0">
+                    <div className={`mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider ${AFF_STYLE[g.affinity].text}`}>
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${AFF_STYLE[g.affinity].dot}`} />{g.affinity}
+                      <span className="font-normal text-neutral-700">({g.schools.length})</span>
                     </div>
-                    <div className="space-y-1.5">
-                      {grp.schools.map((s) => {
-                        const inLoadout = state.loadout.includes(s.id);
-                        const reason = gil.blockReason(s.id);
-                        return <BrowseRow key={s.id} school={s} inLoadout={inLoadout} disabled={!inLoadout && reason != null} reason={reason} onOpen={setDetail} onToggle={gil.toggleSchool} />;
-                      })}
-                    </div>
+                    {g.schools.map((s) => {
+                      const inLoadout = state.loadout.includes(s.id);
+                      const reason = gil.blockReason(s.id);
+                      return <BrowseRow key={s.id} school={s} inLoadout={inLoadout} disabled={!inLoadout && reason != null} reason={reason} onOpen={setDetail} onToggle={gil.toggleSchool} />;
+                    })}
                   </div>
                 ))}
               </div>
-            </section>
+            </Section>
           </div>
         )}
 
-        {/* ═══════════════ REFERENCE ═══════════════ */}
+        {/* ═══════════ REFERENCE ═══════════ */}
         {tab === 'reference' && (
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section>
-              <SectionHeader>Passives & Actions</SectionHeader>
-              <div className="space-y-1.5">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Section title="Passives & Actions">
+              <div className="rounded border border-neutral-800 px-3">
                 {CORE_KIT.map((k, i) => (
-                  <div key={i} className="rounded-lg border border-stone-800 bg-stone-900/40 p-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[13px] font-bold text-stone-100">{k.name}</span>
-                      <span className="rounded bg-stone-800 px-1.5 py-0.5 text-[9px] uppercase text-stone-500">{k.type}{k.tag ? ` (${k.tag})` : ''}</span>
+                  <div key={i} className="border-b border-neutral-900 py-2 last:border-b-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="w-20 shrink-0 font-mono text-[10px] uppercase text-neutral-600">{k.type === 'Intermediate' ? 'Int' : k.type}</span>
+                      <span className="text-sm font-medium text-neutral-100">{k.name}</span>
                     </div>
-                    <div className="mt-0.5 text-[11px] leading-relaxed text-stone-400">{k.desc}</div>
+                    <p className="ml-[88px] mt-0.5 text-xs leading-relaxed text-neutral-400">{k.desc}</p>
                   </div>
                 ))}
               </div>
-            </section>
+            </Section>
 
-            <div className="space-y-5">
-              <section>
-                <SectionHeader>How Casting Works</SectionHeader>
-                <div className="grid grid-cols-3 gap-1.5">
+            <div className="space-y-6">
+              <Section title="Casting">
+                <div className="rounded border border-neutral-800">
                   {CASTING_RULES.map((c) => (
-                    <div key={c.cost} className="rounded-xl border border-stone-800 bg-stone-900/50 p-2.5 text-center">
-                      <div className="font-serif text-sm font-black text-emerald-300">{c.cost}</div>
-                      <div className="mt-0.5 text-[10px] leading-tight text-stone-400">{c.effect}</div>
+                    <div key={c.cost} className="flex items-baseline gap-3 border-b border-neutral-900 px-3 py-2 last:border-b-0">
+                      <span className="w-16 shrink-0 font-mono text-xs text-emerald-400">{c.cost}</span>
+                      <span className="text-xs text-neutral-400">{c.effect}</span>
                     </div>
                   ))}
                 </div>
-              </section>
+                <p className="mt-1.5 text-[11px] text-neutral-600">Loadout is 4 schools, each a different affinity.</p>
+              </Section>
 
-              <section>
-                <SectionHeader>The Garden — Flowers</SectionHeader>
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                  {FLOWERS.map((f) => (
-                    <Tip key={f.name} content={f.desc} title={`${f.name} Flower`} className="cursor-help">
-                      <div className="flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900/40 px-2 py-1.5">
-                        <span className="h-4 w-4 shrink-0 rounded-full border border-stone-600" style={{ backgroundColor: flowerColor(f.color) }} />
-                        <span className="text-[13px] font-semibold text-stone-100">{f.name}</span>
-                      </div>
-                    </Tip>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-[10px] text-stone-500">Flowers bloom on 86+. Cultivation rolls 2d100 (3d100 with a Green Flower) at end of turn.</p>
-              </section>
-
-              <section>
-                <SectionHeader>Blessed Items</SectionHeader>
-                <div className="flex flex-wrap gap-1.5">
+              <Section title="Blessed Items">
+                <div className="rounded border border-neutral-800 px-3">
                   {BLESSED_ITEMS.map((it) => (
-                    <Tip key={it.name} content={it.desc} title={it.name} className="cursor-help">
-                      <span className="rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-2.5 py-1.5 text-[13px] font-semibold text-amber-200 transition hover:bg-amber-500/12">{it.name}</span>
-                    </Tip>
+                    <div key={it.name} className="border-b border-neutral-900 py-2 last:border-b-0">
+                      <div className="text-sm font-medium text-amber-200/90">{it.name}</div>
+                      <p className="mt-0.5 text-xs leading-relaxed text-neutral-400">{it.desc}</p>
+                    </div>
                   ))}
                 </div>
-              </section>
+              </Section>
 
-              <section>
-                <SectionHeader right={<span className="text-[10px] text-stone-500">tap when triggered</span>}>Bloom Bingo</SectionHeader>
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              <Section title="The Garden">
+                <div className="rounded border border-neutral-800 px-3">
+                  {FLOWERS.map((f) => (
+                    <div key={f.name} className="flex gap-2.5 border-b border-neutral-900 py-2 last:border-b-0">
+                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full border border-neutral-700" style={{ backgroundColor: FLOWER_HEX[f.name] }} />
+                      <div>
+                        <div className="text-sm font-medium text-neutral-100">{f.name}</div>
+                        <p className="mt-0.5 text-xs leading-relaxed text-neutral-400">{f.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+
+              <Section title="Bloom Bingo" right={<span className="text-[10px] text-neutral-600">click when triggered</span>}>
+                <div className="grid grid-cols-2 gap-1.5">
                   {BLOOM_BINGO.map((b) => {
                     const on = !!state.bloom[b.sin];
                     return (
-                      <button key={b.sin} onClick={() => gil.toggleBloom(b.sin)} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition ${on ? 'border-rose-500/50 bg-rose-500/10' : 'border-stone-800 bg-stone-900/40 hover:border-stone-600'}`}>
-                        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-[11px] ${on ? 'border-rose-400 bg-rose-500 text-white' : 'border-stone-600 text-transparent'}`}>✓</span>
+                      <button key={b.sin} onClick={() => gil.toggleBloom(b.sin)}
+                        className={`flex items-center gap-2 rounded border px-2 py-1.5 text-left transition ${on ? 'border-emerald-600/60 bg-emerald-500/5' : 'border-neutral-800 hover:border-neutral-600'}`}>
+                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-sm border text-[10px] ${on ? 'border-emerald-500 bg-emerald-500 text-black' : 'border-neutral-700 text-transparent'}`}>✓</span>
                         <span className="min-w-0">
-                          <span className={`block text-[13px] font-bold ${on ? 'text-rose-200 line-through' : 'text-stone-100'}`}>{b.sin}</span>
-                          <span className="block truncate text-[10px] text-stone-500">{b.trigger}</span>
+                          <span className={`block text-[12px] ${on ? 'text-emerald-400' : 'text-neutral-200'}`}>{b.sin}</span>
+                          <span className="block truncate text-[10px] text-neutral-600">{b.trigger}</span>
                         </span>
                       </button>
                     );
                   })}
                 </div>
-              </section>
+              </Section>
             </div>
           </div>
         )}
-      </div>
+      </main>
 
       {detail && (
-        <SchoolDetail school={detail} onClose={() => setDetail(null)} inLoadout={state.loadout.includes(detail.id)} canAdd={gil.blockReason(detail.id) == null} blockReason={gil.blockReason(detail.id)} onToggle={(id) => gil.toggleSchool(id)} />
+        <SchoolDetail school={detail} onClose={() => setDetail(null)} inLoadout={state.loadout.includes(detail.id)}
+          canAdd={gil.blockReason(detail.id) == null} blockReason={gil.blockReason(detail.id)} onToggle={(id) => gil.toggleSchool(id)} />
       )}
     </div>
   );

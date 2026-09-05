@@ -4,9 +4,14 @@
 // resource + burst counters, bloom-bingo flags, and the Ardenvale toggle.
 import { useCallback, useEffect, useState } from 'react';
 import { SCHOOL_BY_ID } from '../data/gil/schools';
-import { BURSTS, RESOURCES, PETAL_AFFINITIES } from '../data/gil/core';
+import { BURSTS, RESOURCES, PETAL_AFFINITIES, MAX_HP, FLOWERS } from '../data/gil/core';
 
 const KEY = 'gil-sheet-v1';
+
+// Red and Blue are summoned free at the start of every combat.
+const FLOWER_START = Object.fromEntries(
+  FLOWERS.map((f) => [f.name, f.name === 'Red' || f.name === 'Blue' ? 1 : 0]),
+);
 
 const DEFAULT = {
   ardenvale: false,
@@ -15,6 +20,9 @@ const DEFAULT = {
   petals: Object.fromEntries(PETAL_AFFINITIES.map((a) => [a, 0])),
   resources: Object.fromEntries(RESOURCES.map((r) => [r.key, r.start])),
   bursts: Object.fromEntries(BURSTS.map((b) => [b.key, b.start])),
+  vitals: { hp: MAX_HP },
+  uses: {}, // { [ability name]: times used this fight }
+  flowers: { ...FLOWER_START }, // { [flower name]: count in play }
   bloom: {}, // { [sin]: true }
 };
 
@@ -29,6 +37,9 @@ function load() {
       petals: { ...DEFAULT.petals, ...(parsed.petals || {}) },
       resources: { ...DEFAULT.resources, ...(parsed.resources || {}) },
       bursts: { ...DEFAULT.bursts, ...(parsed.bursts || {}) },
+      vitals: { ...DEFAULT.vitals, ...(parsed.vitals || {}) },
+      uses: { ...(parsed.uses || {}) },
+      flowers: { ...DEFAULT.flowers, ...(parsed.flowers || {}) },
       bloom: { ...(parsed.bloom || {}) },
     };
   } catch {
@@ -125,6 +136,9 @@ export function useGilSheet() {
       petals: structuredClone(DEFAULT.petals),
       resources: structuredClone(DEFAULT.resources),
       bursts: structuredClone(DEFAULT.bursts),
+      vitals: structuredClone(DEFAULT.vitals),
+      uses: {},
+      flowers: structuredClone(DEFAULT.flowers),
       bloom: {},
       ardenvale: false,
     }));

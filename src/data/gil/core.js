@@ -14,11 +14,14 @@ export const IDENTITY = {
 
 // Base vs. Ardenvale (the Champion passive gives +3 to Damage, Accuracy, Defense
 // while in the Ardenvale → 10 / 10 / 20).
+export const MAX_HP = 150;
+
 export const STATS = [
-  { key: 'health', label: 'Health', base: 100, ardenvale: 100 },
+  { key: 'health', label: 'Health', base: MAX_HP, ardenvale: MAX_HP },
   { key: 'defense', label: 'Defense', base: 17, ardenvale: 20 },
   { key: 'accuracy', label: 'Accuracy', base: 7, ardenvale: 10 },
   { key: 'damage', label: 'Damage (DM)', base: 7, ardenvale: 10 },
+  { key: 'damageDice', label: 'Damage Dice', base: '1d10+5', ardenvale: '1d10+5' },
   { key: 'movement', label: 'Movement', base: 5, ardenvale: 5 },
 ];
 
@@ -79,6 +82,8 @@ export const BLESSED_ITEMS = [
   { name: 'Baby Carrot', desc: 'Consume to turn into the Wererabbit and to speak Rabbit. Transform back by putting on a hat. The carrot must be replanted to be used again.' },
   { name: 'Leaf', desc: 'All Fire Gil casts is Rose Flame. Once per day, can turn another Fire source into Rose Flame (up to 99 Rose Flame Resistance).' },
   { name: 'Lore', desc: 'Items sketched in this notebook can talk and explain their own lore.' },
+  { name: "Green Knight's Gauntlets", desc: '+5 damage against cryptids.' },
+  { name: "Green Knight's Greaves", desc: 'No movement penalties against cryptids.' },
 ];
 
 // Bloom Bingo — the seven sins and their triggers.

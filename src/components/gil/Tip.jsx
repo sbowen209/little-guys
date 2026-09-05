@@ -54,10 +54,10 @@ export default function Tip({ content, title, children, className = '', as: Tag 
             zIndex: 100,
             maxWidth: 'min(340px, calc(100vw - 16px))',
           }}
-          className="pointer-events-none rounded-xl border border-stone-700 bg-stone-950/98 px-3 py-2 text-xs leading-relaxed text-stone-200 shadow-2xl shadow-black/60 ring-1 ring-black/40 backdrop-blur"
+          className="pointer-events-none rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs leading-relaxed text-neutral-300 shadow-2xl shadow-black/80"
         >
           {title && (
-            <div className={`mb-0.5 text-[11px] font-bold uppercase tracking-wide ${accent || 'text-amber-300'}`}>{title}</div>
+            <div className={`mb-1 text-[11px] font-semibold tracking-wide ${accent || 'text-neutral-100'}`}>{title}</div>
           )}
           <div className="whitespace-pre-line">{content}</div>
         </div>,
