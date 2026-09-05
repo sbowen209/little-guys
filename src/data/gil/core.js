@@ -1,23 +1,24 @@
 // src/data/gil/core.js
-// Gil "Virgil" Bowen — Champion of the Ardenvale. Core kit, garden, items.
+// Gil "Virgil" Bowen — Champion of the Arden Veil. Core kit, garden, items.
 // Transcribed from the workbook's Gil tab.
 
 export const IDENTITY = {
   name: 'Gil',
   fullName: 'Virgil "Gil" Bowen',
-  title: 'Champion of the Ardenvale',
+  title: 'Champion of the Arden Veil',
   affinity: 'Shadow',
   weakness: 'Spirit',
   phases: ['Standard', 'Affinity (Magic)', 'Movement'],
   image: '/images/characters/Gil.webp',
 };
 
-// Base vs. Ardenvale (the Champion passive gives +3 to Damage, Accuracy, Defense
-// while in the Ardenvale → 10 / 10 / 20).
-export const MAX_HP = 150;
+// Base vs. Arden Veil (the Champion passive raises Health to 200 and gives +3 to
+// Damage, Accuracy and Defense → 10 / 10 / 20).
+export const MAX_HP = 150;      // base
+export const ARDEN_HP = 200;    // while fighting in the Arden Veil
 
 export const STATS = [
-  { key: 'health', label: 'Health', base: MAX_HP, ardenvale: MAX_HP },
+  { key: 'health', label: 'Health', base: MAX_HP, ardenvale: ARDEN_HP },
   { key: 'defense', label: 'Defense', base: 17, ardenvale: 20 },
   { key: 'accuracy', label: 'Accuracy', base: 7, ardenvale: 10 },
   { key: 'damage', label: 'Damage (DM)', base: 7, ardenvale: 10 },
@@ -49,20 +50,21 @@ export const PETAL_AFFINITIES = ['Earth', 'Water', 'Air', 'Fire', 'Spirit', 'Sha
 export const CORE_KIT = [
   { type: 'Affinity', name: 'Shadow Affinity', desc: 'Weakness to Spirit Affinity damage.' },
   { type: 'Nile Aura', name: 'Stolen Spellweaving', desc: 'Can use Petals to cast spells from the different Stolen Schools.' },
-  { type: 'Passive', name: 'Champion of the Ardenvale', desc: "While in the Ardenvale, Gil's Damage, Accuracy and Defense become 10 / 10 / 20 (+3 to each)." },
-  { type: 'Passive', name: 'Ardenvale', desc: 'When entering combat, summon 2 Unbloomed Flowers (Red and Blue). Bloomed flowers grant 1 Tech point, generate 1 Petal of a random affinity, and can be collected to restore Health.' },
+  { type: 'Passive', name: 'Champion of the Arden Veil', desc: "While in the Arden Veil, Gil's Health becomes 200 and his Damage, Accuracy and Defense become 10 / 10 / 20 (+3 to each)." },
+  { type: 'Passive', name: 'Arden Veil', desc: 'When entering combat, summon 2 Unbloomed Flowers (Red and Blue). Bloomed flowers generate 1 Petal of a random affinity and can be collected to restore Health. Whenever a Flower blooms, gain 10 Temporary Affinity.' },
   { type: 'Passive', name: 'Cultivation', desc: 'At the end of each turn, roll 2d100. Each roll of 86+ grants a Petal. While a Green Flower is in bloom, roll 3d100 instead.' },
-  { type: 'Passive', name: 'Nectar', desc: 'Whenever a Flower blooms, gain 10 Temporary Affinity.' },
   { type: 'Passive', name: 'Twisted Thistle', desc: 'Vine Helix may be used as a Standard Action. It cannot be used more than once per turn.' },
   { type: 'Passive', name: 'Battle Blooms', desc: 'Can perform actions during his turn to grant bloom rolls. Successful rolls grant Tech points and Petals of random affinity.' },
-  { type: 'Essential', tag: '-', name: 'Vine Helix', desc: 'Attack. 1d6 damage. On a successful hit, choose one effect: pull self to target, pull target to Gil (requires an additional Attack Roll), deal 1d8 Lifesteal, or apply Knockback (1-3). May instead harvest an adjacent plant or conjuration to take its Petal.' },
-  { type: 'Essential', tag: '-', name: 'Sow', desc: 'Plant one Unbloomed Flower of any colour he has unlocked within 6.' },
-  { type: 'Minor', tag: '2', name: 'Stolen Spellweaving', desc: "Attack. On a successful hit, queue (or immediately cast) a spell associated with the target's affinity. After the spell is cast, gain 1 Petal of a random affinity." },
-  { type: 'Minor', tag: '2', name: 'Entangling Vines', desc: 'Attack, Range 6. On a successful hit the target is Rooted — it cannot move away from Gil for 2 turns, ending early if it lands a successful attack on the vines. Vine Helix has Advantage against Rooted targets.' },
-  { type: 'Minor', tag: '2', name: 'Yellow Bloom', desc: 'Consume 1 Petal to plant a Yellow Unbloomed Flower. When it Blooms, gain 3 Petals of that affinity.' },
-  { type: 'Intermediate', tag: '1', name: 'Helix Bramble', desc: '(Conjuration) Summon a 6-attack Bramble within 6. Each turn it attacks every adjacent enemy twice for 1d12 at half Accuracy (rounded down). Vine Helix may harvest it for 1 Petal, once.' },
-  { type: 'Intermediate', tag: '1', name: 'Kokirin Wrath', desc: 'Vine Helix may be used repeatedly this turn, against as many unique targets as are within range.' },
-  { type: 'Advanced', tag: '1', name: 'Rainbow Garden', desc: 'Usable only after at least one of each Flower type has bloomed this fight. Plant a Flower for each of the 4 Affinities in his loadout. Each produces Petals of its own Affinity, and is replanted when picked up.' },
+  // `charges` = uses per fight (the number beside the type on the old sheet).
+  // null means unlimited.
+  { type: 'Essential', charges: null, name: 'Vine Helix', desc: 'Attack. 1d6 damage. On a successful hit, choose one effect: pull self to target, pull target to Gil (requires an additional Attack Roll), deal 1d8 Lifesteal, or apply Knockback (1-3). May instead harvest an adjacent plant or conjuration to take its Petal.' },
+  { type: 'Essential', charges: null, name: 'Sow', desc: 'Plant one Unbloomed Flower of any colour he has unlocked within 6.' },
+  { type: 'Minor', charges: 2, name: 'Stolen Spellweaving', desc: "Attack. On a successful hit, queue (or immediately cast) a spell associated with the target's affinity. After the spell is cast, gain 1 Petal of a random affinity." },
+  { type: 'Minor', charges: 2, name: 'Entangling Vines', desc: 'Attack, Range 6. On a successful hit the target is Rooted — it cannot move away from Gil for 2 turns, ending early if it lands a successful attack on the vines. Vine Helix has Advantage against Rooted targets.' },
+  { type: 'Minor', charges: 2, name: 'Yellow Bloom', desc: 'Consume 1 Petal to plant a Yellow Unbloomed Flower. When it Blooms, gain 3 Petals of that affinity.' },
+  { type: 'Intermediate', charges: 1, name: 'Helix Bramble', desc: '(Conjuration) Summon a 6-attack Bramble within 6. Each turn it attacks every adjacent enemy twice for 1d12 at half Accuracy (rounded down). Vine Helix may harvest it for 1 Petal, once.' },
+  { type: 'Intermediate', charges: 1, name: 'Kokirin Wrath', desc: 'Vine Helix may be used repeatedly this turn, against as many unique targets as are within range.' },
+  { type: 'Advanced', charges: 1, name: 'Rainbow Garden', desc: 'Usable only after at least one of each Flower type has bloomed this fight. Plant a Flower for each of the 4 Affinities in his loadout. Each produces Petals of its own Affinity, and is replanted when picked up.' },
 ];
 
 // The Garden — flowers.
