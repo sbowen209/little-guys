@@ -6,6 +6,10 @@ import { useMemo, useState } from 'react';
 import { assetUrl } from '../utils/assets';
 import { useGilSheet } from '../hooks/useGilSheet';
 import Tip from '../components/gil/Tip';
+import AllySheet from '../components/gil/AllySheet';
+import { Stepper, Charges, Section, HoverName } from '../components/gil/ui';
+import { TIER, SHORT_TYPE } from '../data/gil/tiers';
+import { AIDA } from '../data/gil/allies';
 import {
   SCHOOLS, SCHOOL_BY_ID, AFFINITY_ORDER, AFF_STYLE, PAST_LOADOUTS, SCHOOL_BY_NAME,
 } from '../data/gil/schools';
@@ -18,88 +22,23 @@ const ACTION_TYPES = ['Essential', 'Minor', 'Intermediate', 'Advanced'];
 const CORE_ACTIONS = CORE_KIT.filter((k) => ACTION_TYPES.includes(k.type));
 const CORE_PASSIVES = CORE_KIT.filter((k) => !ACTION_TYPES.includes(k.type));
 
-// Tier palette — the sheet's main source of colour.
-const TIER = {
-  Essential:    { name: 'text-emerald-200', label: 'text-emerald-500', pip: 'bg-emerald-400' },
-  Minor:        { name: 'text-sky-200',     label: 'text-sky-500',     pip: 'bg-sky-400' },
-  Intermediate: { name: 'text-amber-200',   label: 'text-amber-500',   pip: 'bg-amber-400' },
-  Advanced:     { name: 'text-rose-200',    label: 'text-rose-500',    pip: 'bg-rose-400' },
-};
-const SHORT_TYPE = { Intermediate: 'Int', Essential: 'Ess', Minor: 'Minor', Advanced: 'Adv' };
-
 const FLOWER_HEX = {
   Red: '#dc2626', Blue: '#2563eb', Yellow: '#ca8a04',
   Green: '#16a34a', 'Black Root': '#404040', Oni: '#7c3aed',
 };
-
-// ─────────────────────────── primitives ───────────────────────────
-
-function Stepper({ value, onDec, onInc, tone = 'text-neutral-100' }) {
-  return (
-    <div className="flex items-center gap-1">
-      <button onClick={onDec} className="grid h-6 w-6 place-items-center rounded border border-neutral-800 text-sm leading-none text-neutral-500 transition hover:border-neutral-600 hover:text-neutral-200 active:scale-90" aria-label="decrease">−</button>
-      <span className={`w-6 text-center font-mono text-sm font-semibold tabular-nums ${value === 0 ? 'text-neutral-600' : tone}`}>{value}</span>
-      <button onClick={onInc} className="grid h-6 w-6 place-items-center rounded border border-neutral-800 text-sm leading-none text-neutral-500 transition hover:border-neutral-600 hover:text-neutral-200 active:scale-90" aria-label="increase">+</button>
-    </div>
-  );
-}
-
-// Charge pips. A charge is spent when its pip is hollow; click to spend/restore.
-function Charges({ total, used, onSet, tier }) {
-  if (total == null) {
-    return <span className="font-mono text-[13px] leading-none text-neutral-700" title="No charge limit">∞</span>;
-  }
-  return (
-    <div className="flex items-center gap-1">
-      {Array.from({ length: total }, (_, i) => {
-        const spent = i < used;
-        return (
-          <button
-            key={i}
-            onClick={() => onSet(i < used ? i : i + 1)}
-            title={spent ? 'Restore charge' : 'Spend charge'}
-            aria-label={spent ? 'Restore charge' : 'Spend charge'}
-            className={`h-3.5 w-3.5 rounded-full border transition hover:scale-125 ${spent ? 'border-neutral-700 bg-transparent' : `${tier.pip} border-transparent`}`}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function Section({ title, right, children, className = '' }) {
-  return (
-    <section className={className}>
-      <div className="mb-2 flex items-baseline justify-between gap-3 border-b border-neutral-800 pb-1.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">{title}</h2>
-        {right}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-// A name you can hover for its rules text — dotted underline signals it.
-function HoverName({ title, desc, accent, className = '' }) {
-  return (
-    <Tip content={desc} title={title} accent={accent} className="inline-block cursor-help">
-      <span className={`border-b border-dotted border-neutral-700 transition hover:border-neutral-400 ${className}`}>{title}</span>
-    </Tip>
-  );
-}
 
 // ─────────────────────────── core kit ───────────────────────────
 
 function CoreKitTable({ uses, onSet }) {
   return (
     <div className="overflow-hidden rounded border border-neutral-800">
-      <div className="grid grid-cols-[68px_74px_1fr] items-center gap-2 border-b border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+      <div className="grid grid-cols-[68px_92px_1fr] items-center gap-2 border-b border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
         <span>Charges</span><span>Type</span><span>Ability</span>
       </div>
       {CORE_ACTIONS.map((k) => {
         const tier = TIER[k.type];
         return (
-          <div key={k.name + k.type} className="grid grid-cols-[68px_74px_1fr] items-center gap-2 border-b border-neutral-900 px-2.5 py-1.5 transition last:border-b-0 hover:bg-neutral-950">
+          <div key={k.name + k.type} className="grid grid-cols-[68px_92px_1fr] items-center gap-2 border-b border-neutral-900 px-2.5 py-1.5 transition last:border-b-0 hover:bg-neutral-950">
             <Charges total={k.charges} used={uses[k.name] || 0} tier={tier} onSet={(v) => onSet(k.name, v)} />
             <span className={`text-[11px] ${tier.label}`}>
               {SHORT_TYPE[k.type]}{k.charges != null ? ` (${k.charges})` : ''}
@@ -292,7 +231,12 @@ function BloomBingo({ bloom, onToggle }) {
   );
 }
 
-const TABS = [{ id: 'play', label: 'Play' }, { id: 'schools', label: 'Schools' }, { id: 'reference', label: 'Reference' }];
+const TABS = [
+  { id: 'play', label: 'Play' },
+  { id: 'schools', label: 'Schools' },
+  { id: 'allies', label: 'Allies' },
+  { id: 'reference', label: 'Reference' },
+];
 
 // ─────────────────────────── main ───────────────────────────
 
@@ -343,15 +287,10 @@ export default function CharacterSheet({ onBack }) {
           <div className="grid gap-5 lg:grid-cols-[272px_1fr]">
             {/* left rail — trackers */}
             <aside className="space-y-5 lg:sticky lg:top-14 lg:self-start">
-              <div className="flex items-center gap-3">
-                <img src={assetUrl(IDENTITY.image)} alt={IDENTITY.fullName} className="h-32 w-32 shrink-0 rounded border border-neutral-800 object-cover object-top" />
-                <div className="min-w-0">
-                  <h1 className="text-2xl font-semibold leading-none text-neutral-50">{IDENTITY.name}</h1>
-                  <p className="mt-1 text-[11px] leading-tight text-emerald-500/90">{IDENTITY.title}</p>
-                  <p className="mt-1.5 text-[11px] leading-tight text-neutral-400">
-                    <span className="text-violet-400">Shadow</span><br />weak to <span className="text-fuchsia-400">Spirit</span>
-                  </p>
-                </div>
+              <div>
+                <img src={assetUrl(IDENTITY.image)} alt={IDENTITY.fullName} className="h-64 w-full rounded border border-neutral-800 object-cover object-top" />
+                <h1 className="mt-2 text-3xl font-semibold leading-none text-neutral-50">{IDENTITY.name}</h1>
+                <p className="mt-1 text-[11px] text-emerald-500/90">{IDENTITY.title}</p>
               </div>
 
               <Section title="Stats">
@@ -425,9 +364,18 @@ export default function CharacterSheet({ onBack }) {
             <div className="min-w-0 space-y-5">
               <Section title="Core Kit" right={<span className="text-[10px] text-neutral-600">click a pip to spend a charge · hover a name for its rules</span>}>
                 <CoreKitTable uses={state.uses} onSet={(name, v) => gil.setCounter('uses', name, v)} />
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              </Section>
+
+              <Section title="Passives">
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                   {CORE_PASSIVES.map((k) => (
-                    <HoverName key={k.name} title={k.name} desc={k.desc} className="text-[11px] text-neutral-500" />
+                    <HoverName
+                      key={k.name}
+                      title={k.name}
+                      desc={k.desc}
+                      accent={k.type === 'Affinity' ? 'text-violet-300' : undefined}
+                      className={`text-[12px] ${k.type === 'Affinity' ? 'text-violet-400' : 'text-neutral-400'}`}
+                    />
                   ))}
                 </div>
               </Section>
@@ -545,6 +493,17 @@ export default function CharacterSheet({ onBack }) {
               </div>
             </Section>
           </div>
+        )}
+
+        {/* ═══════════ ALLIES ═══════════ */}
+        {tab === 'allies' && (
+          <AllySheet
+            ally={AIDA}
+            battery={state.ally.battery}
+            onBattery={(v) => gil.setCounter('ally', 'battery', v)}
+            uses={state.allyUses}
+            onUse={(name, v) => gil.setCounter('allyUses', name, v)}
+          />
         )}
 
         {/* ═══════════ REFERENCE ═══════════ */}

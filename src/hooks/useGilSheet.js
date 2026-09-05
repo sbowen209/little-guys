@@ -24,6 +24,8 @@ const DEFAULT = {
   uses: {}, // { [ability name]: times used this fight }
   flowers: { ...FLOWER_START }, // { [flower name]: count in play }
   bloom: {}, // { [sin]: true }
+  ally: { battery: 100 }, // Aida's Ether Battery
+  allyUses: {}, // { [technique name]: times used this fight }
 };
 
 function load() {
@@ -41,6 +43,8 @@ function load() {
       uses: { ...(parsed.uses || {}) },
       flowers: { ...DEFAULT.flowers, ...(parsed.flowers || {}) },
       bloom: { ...(parsed.bloom || {}) },
+      ally: { ...DEFAULT.ally, ...(parsed.ally || {}) },
+      allyUses: { ...(parsed.allyUses || {}) },
     };
   } catch {
     return structuredClone(DEFAULT);
@@ -140,6 +144,8 @@ export function useGilSheet() {
       uses: {},
       flowers: structuredClone(DEFAULT.flowers),
       bloom: {},
+      ally: structuredClone(DEFAULT.ally),
+      allyUses: {},
       ardenvale: false,
     }));
   }, []);
