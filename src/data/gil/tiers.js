@@ -11,6 +11,15 @@ export const TIER = {
 };
 
 // Aida is Spirit-aligned.
-export const SPIRIT_TIER = { name: 'text-fuchsia-200', label: 'text-fuchsia-500', pip: 'bg-fuchsia-400' };
+export const SPIRIT_TIER = {
+  name: 'text-fuchsia-200', label: 'text-fuchsia-500', pip: 'bg-fuchsia-400',
+  soft: 'text-fuchsia-300', strong: 'text-fuchsia-400', focus: 'focus:border-fuchsia-500',
+};
+
+// Kitana is Shadow-aligned.
+export const SHADOW_TIER = {
+  name: 'text-violet-200', label: 'text-violet-500', pip: 'bg-violet-400',
+  soft: 'text-violet-300', strong: 'text-violet-400', focus: 'focus:border-violet-500',
+};
 
 export const SHORT_TYPE = { Intermediate: 'Int', Essential: 'Essential', Minor: 'Minor', Advanced: 'Adv' };

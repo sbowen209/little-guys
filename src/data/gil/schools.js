@@ -7,12 +7,12 @@
 // Loadout rule: pick 4 schools, each of a DIFFERENT affinity.
 
 export const AFFINITIES = {
-  Earth:  { icon: '🌿', blurb: '4 schools' },
-  Water:  { icon: '💧', blurb: '5 schools' },
-  Air:    { icon: '🌪️', blurb: '3 schools' },
-  Fire:   { icon: '🔥', blurb: '2 schools' },
-  Spirit: { icon: '✨', blurb: '4 schools' },
-  Shadow: { icon: '🌑', blurb: '5 schools' },
+  Earth:  { icon: '🌿', blurb: '5 schools' },
+  Water:  { icon: '💧', blurb: '6 schools' },
+  Air:    { icon: '🌪️', blurb: '4 schools' },
+  Fire:   { icon: '🔥', blurb: '3 schools' },
+  Spirit: { icon: '✨', blurb: '5 schools' },
+  Shadow: { icon: '🌑', blurb: '6 schools' },
 };
 
 export const AFFINITY_ORDER = ['Earth', 'Water', 'Air', 'Fire', 'Spirit', 'Shadow'];
@@ -134,6 +134,24 @@ export const SCHOOLS = [
     advanced: { name: 'Earthquake', desc: '(Molerat does not surface) Attack, Wave 4, 4d10 Earth dmg, Knockdown.' },
   },
 
+  {
+    id: 'chatter-of-the-squirrels', name: 'Chatter of the Squirrels', affinity: 'Earth', minorDie: 3, interDie: 2,
+    traits: [
+      { type: 'Passive', name: 'Acorns', desc: 'Whenever a unit is dmged by a spell in this school or by a Squirrel, generate 1 Acorn. 5 Acorns may be exchanged to add/subtract a stack of an effect that has stacks. Cannot lower stacks to 0.' },
+      { type: 'Summon', name: 'Squirrel', desc: 'Squirrels have 8 Def, 0 Accuracy, deal 1 dmg, 7 Movement, Insignificant, and do not provoke Attacks of Opportunity. Can always take actions the turn they are summoned. Die after dealing dmg.' },
+      { type: 'Summon', name: 'Chubby Cheeks', desc: 'Has 8 Def, and six 30 All Reduction Shields. Cannot move the turn summoned. Each turn can move 5. Can spend a phase to Explode, dealing 4d6 Earth dmg in Wave 2. Explodes on Death as well. Summons 5 Acorns in random positions that can be retrieved.' },
+    ],
+    minors: [
+      { name: 'Acorn Bomb', desc: 'Attack, Range 8, Splash 1, 2d6 Earth dmg.' },
+      { name: 'Squirrel Toss', desc: 'Attack, Range 8, 1d4 Earth dmg, summon 1 Squirrel. This Attack may bounce up to 2 times.' },
+      { name: 'Chatter of the Squirrels', desc: '(Hex) Summon 4 Squirrels that Attack the target. They may still take Actions this turn, including an additional Attack.' },
+    ],
+    inters: [
+      { name: 'Squeek Sword', desc: '(Enhance) For the next 3 Basic Attacks, add +2d6 Earth dmg. For each 6, gain an Acorn.' },
+      { name: 'Harvest', desc: 'Gain 1d10 Acorns, then Summon 10 - X Squirrels, where X = number rolled on the 1d10.' },
+    ],
+    advanced: { name: 'Chubby Cheeks', desc: '(Conjuration) Summon Chubby Cheeks.' },
+  },
   // ────────────────────────────── WATER ──────────────────────────────
   {
     id: 'frogadiers', name: 'Frogadiers', affinity: 'Water', minorDie: 3, interDie: 2,
@@ -218,6 +236,24 @@ export const SCHOOLS = [
     advanced: { name: 'Spiritual Assault', desc: '(Conjuration) Summon Droplets, Wet Bone, and Big Drop for 3 turns.' },
   },
 
+  {
+    id: 'battleship', name: 'Battleship', affinity: 'Water', minorDie: 3, interDie: 2,
+    traits: [
+      { type: 'Passive', name: 'Missle Bay', desc: 'At the start of combat build a Missle Bay. Each time a spell is cast, roll a "Bloom" roll for the Missle Bay for each spell level. When it launches, it goes Airborne, then next turn deals 4d10 Water dmg to a target and grants 10 Temp Aff, then a new Missle is docked.' },
+      { type: 'Debuff', name: 'Drowning', desc: 'Each turn suffers 1d6 dmg. Removed when rolling a 4+. While it is maintained, the target has Disadvantage on all Attacks.' },
+      { type: 'Summon', name: 'Sea-Mine', desc: 'When someone collides with a Sea-Mine it deals 4d10 Water dmg and Knockback = 1d6. If struck, it is pushed in the opposite direction for half the dmg.' },
+    ],
+    minors: [
+      { name: 'Sea Mine', desc: '(Conjuration) Summon a Sea-Mine within 8.' },
+      { name: 'Missle Pod', desc: '(Conjuration) Build a second Missle Bay. This one does not restock missles after firing.' },
+      { name: 'Whirlpool', desc: '(Debuff) Inflict Immobilize and Drowning.' },
+    ],
+    inters: [
+      { name: 'Lobshot', desc: 'Attack, Range 8, 2d10 Water dmg, then summon a Sea-Mine randomly within 1 of the target.' },
+      { name: "Sunk'Em", desc: '(Debuff) Inflict Drowning. When it fades, the Missle Bay launches at this target.' },
+    ],
+    advanced: { name: 'Battleship', desc: 'Each turn make two guesses on Battleship (single 2-hit ship). When the enemy ship is hit, either summon 3 Sea-Mines or launch 3 Missles.' },
+  },
   // ─────────────────────────────── AIR ───────────────────────────────
   {
     id: 'gale-kicks', name: 'Gale Kicks', affinity: 'Air', minorDie: 3, interDie: 2,
@@ -270,6 +306,23 @@ export const SCHOOLS = [
     advanced: { name: 'Lightning Bolt', desc: 'Attack. Target suffers 1d40 Air dmg. Make a line tool from the target. Each enemy in this lance suffers 1d20 Air dmg.' },
   },
 
+  {
+    id: 'tornado-alley', name: 'Tornado Alley', affinity: 'Air', minorDie: 3, interDie: 2,
+    traits: [
+      { type: 'Passive', name: 'Gale Force', desc: 'When casting a spell gain 1 Gale Force for each spell level (1/2/4). Also gain +1 point when Air dmg causes a target to collide with an immovable object. After dealing some type of Affinity dmg, can spend X Gale Force to push the target 2X in any straight direction.' },
+      { type: 'Debuff', name: 'Ragdoll', desc: 'Target takes double dmg from being pushed into Immovable Objects. Flowers, Frogs, and Tea count as unmovable to this unit.' },
+    ],
+    minors: [
+      { name: 'Hurricane', desc: 'Attack, Wave 1, 1d12 Air dmg, inflict Knockback 5 on targets struck, in a random cardinal direction.' },
+      { name: 'Tornado', desc: 'Attack, Lance 12, 1d12 Air dmg, inflict Knockback 5 on targets struck, in a random perpendicular direction from where they were hit.' },
+      { name: 'Downdraft', desc: 'Attack, Range 12, Splash 1, 1d12 Air dmg, inflict Knockback 2 away from center. If in the center, inflict Knocked Down.' },
+    ],
+    inters: [
+      { name: 'Ragdoll', desc: '(Debuff) Inflict Ragdoll, then Knockback 10 on the target in any straight direction.' },
+      { name: 'Twin Twister', desc: 'Attack, Lance 12, affects two adjacent Lances, 2d12 Air dmg, inflict Knockback 10 on targets struck, in a random perpendicular direction from where they were hit.' },
+    ],
+    advanced: { name: 'Wind Force', desc: 'Attack, Sweep 12, 4d12 dmg, Pierce, inflict Knockback 15 on targets struck, in a random perpendicular direction from where they were hit.' },
+  },
   // ─────────────────────────────── FIRE ──────────────────────────────
   {
     id: 'rose-flame', name: 'Rose Flame', affinity: 'Fire', minorDie: 3, interDie: 2,
@@ -304,6 +357,24 @@ export const SCHOOLS = [
     advanced: { name: 'Scorching Ray', desc: 'Attack, Lance 8, 8d6 Fire dmg, inflict Burning.' },
   },
 
+  {
+    id: 'hellfire', name: 'Hellfire', affinity: 'Fire', minorDie: 3, interDie: 2,
+    traits: [
+      { type: 'Passive', name: "Hell's Fire", desc: 'When this spell school damages a unit with Full HP, it deals an additional +3d6 Fire dmg.' },
+      { type: 'Debuff', name: 'Perdition', desc: 'When a unit gains Perdition, they are removed from the map until the end of their next turn. They may take actions in Perdition, but cannot interact with the map.' },
+      { type: 'Summon', name: 'Hellfire Hound', desc: '30 HP, 10 Def, 5 AC, 1d10 dmg, Advantage on dmg against Shadow. Attacks a random unit within range each turn. If the summoner ends their turn more than 3 away, the summon is dismissed.' },
+    ],
+    minors: [
+      { name: 'Hellfire Bolt', desc: 'Attack, Range 7, 3d6 Fire dmg, deals an extra +3d6 if the target is at full HP. This spell can ignore Adjacency.' },
+      { name: 'Hell Leash', desc: '(Conjuration) Summon a Hellfire Hound.' },
+      { name: 'Fangs of Perdition', desc: 'Attack, Range 1, 2d6 Fire dmg, inflict Perdition.' },
+    ],
+    inters: [
+      { name: 'Claws of Perdition', desc: 'Attack, Range 7, Splash 1, 3d6 Fire dmg, targets either 1 unit per row or 1 per column. Inflict Perdition on the unit that took the most dmg.' },
+      { name: 'Hellberus', desc: '(Conjuration) Summon 3 Hellfire Hounds.' },
+    ],
+    advanced: { name: 'Dragged to Hell', desc: '(Hex) 8d8 Fire dmg and inflict Perdition. At the start of their next turn, they suffer 8d6 Fire dmg again.' },
+  },
   // ────────────────────────────── SPIRIT ─────────────────────────────
   {
     id: 'tea-time', name: 'Tea Time', affinity: 'Spirit', minorDie: 6, interDie: 0,
@@ -372,6 +443,22 @@ export const SCHOOLS = [
     advanced: { name: 'Rainbow Mist', desc: 'Cast 4 Minor spells of your choosing from among any spell schools.' },
   },
 
+  {
+    id: 'cybernetic-evolution', name: 'Cybernetic Evolution', affinity: 'Spirit', minorDie: 3, interDie: 2,
+    traits: [
+      { type: 'Passive', name: 'Cyber End', desc: 'When casting a spell from this school, has a (25% / 50% / 100%) chance of summoning a Cyber Dragon until the start of next turn that makes an Attack dealing 1d21 on a random enemy.' },
+    ],
+    minors: [
+      { name: 'Overload Barrage', desc: 'Attack, Range 12, targets up to 4 unique targets, 1d10 Ether dmg. If there is a Cyber Dragon, targets 2 more random targets (potentially duplicates).' },
+      { name: 'Target Lock', desc: '(Enhance) Gain 2 Temporary Truestrike Bursts, which can be used to give an Attack Truestrike. Any Cyber Dragon gains Truestrike this turn.' },
+      { name: 'Adaptive Core', desc: '(Enhance) Gain two 30 Reduction dmg Shields for up to two chosen dmg types. If there is a Cyber Dragon, gain an extra Affinity Phase.' },
+    ],
+    inters: [
+      { name: 'Proton Slash', desc: '(Enhance) The next Basic Attack deals +1d10 Ether dmg and then Freecasts Stolen Spellweaving. If this Attack connects, it has an additional 50% chance to summon a Cyber Dragon.' },
+      { name: 'Magnetic Assault', desc: '(Hex) A target up to 10 spaces away is pulled to the caster. The next Basic Attack this turn on the target deals +2d10 Ether dmg. Cyber Dragon will then Attack this target if they are within 4.' },
+    ],
+    advanced: { name: 'Cybernetic Evolution', desc: '(Enhance) Basic Attack dmg is raised to 1d21 + DM. This buff is removed if a Natural 1 is rolled for a Basic Attack.' },
+  },
   // ────────────────────────────── SHADOW ─────────────────────────────
   {
     id: 'augmented-armor', name: 'Augmented Armor', affinity: 'Shadow', minorDie: 3, interDie: 2,
@@ -456,6 +543,23 @@ export const SCHOOLS = [
       { name: 'Pandemic', desc: '(Debuff) Inflict Toxic on up to 4 enemies and summon a Zombie next to each. The Zombies inflict Toxic with their Basic Attacks.' },
     ],
     advanced: { name: 'Black Rose', desc: 'Add 40 HP to the Black Garden, then summon the Black Rose. She can act this turn, has +5 DM, gains the Pandemic passive, and has 17 Def.' },
+  },
+  {
+    id: 'talvashir-blood', name: "Tal'Vashir Blood", affinity: 'Shadow', minorDie: 3, interDie: 2,
+    traits: [
+      { type: 'Passive', name: 'Transfusion', desc: 'Gain X stacks of Transfusion whenever gaining HP through Shadow Spells. Can spend an Affinity Phase and X stacks to make a Hex, dealing 1dX dmg with Lifesteal. This Attack does not generate Transfusion.' },
+      { type: 'Debuff', name: 'Sanguinate', desc: 'When a unit with Sanguinate is dealt dmg, consume this debuff for the Attacker to gain HP = dmg done. Half of this HP counts for Transfusion and caps at 50 HP.' },
+    ],
+    minors: [
+      { name: 'Blood Blade', desc: 'Attack, Range 7, 2d8 Shadow dmg, gain HP = the higher number rolled.' },
+      { name: 'Crescent Slash', desc: 'Attack, targets any 5 adjacent connected spaces, 1d8 dmg, gain 1d6 HP for each target struck.' },
+      { name: 'Blood Wings', desc: '(Enhance) Gain Airborne for 1 turn. Next turn, when descending, any Basic Attack has Lifesteal on the dmg dice.' },
+    ],
+    inters: [
+      { name: 'Sanguinate', desc: '(Debuff) Inflict Sanguinate.' },
+      { name: 'Ancient Blood', desc: '(Enhance) Gain 1 Resist Burst. When used, regain 1d30 HP, with Advantage if the Resist Burst removed a debuff.' },
+    ],
+    advanced: { name: 'Blood Rayne', desc: 'Gain Airborne, then cast Blood Blade 5 times.' },
   },
 ];
 

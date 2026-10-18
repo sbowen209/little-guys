@@ -1,5 +1,6 @@
 // src/data/gil/allies.js
 // Allies who fight alongside Gil. Transcribed from the workbook's Allies tab.
+import { SPIRIT_TIER, SHADOW_TIER } from './tiers';
 
 export const AIDA = {
   id: 'aida',
@@ -10,7 +11,8 @@ export const AIDA = {
   imagePlaceholder: true,
   affinity: 'Spirit',
   weakness: 'Shadow',
-  battery: { label: 'Ether Battery', start: 100 },
+  tier: SPIRIT_TIER,
+  resource: { key: 'battery', label: 'Ether Battery', start: 100 },
   // Health / Defense / Accuracy / Damage were never filled in on the sheet.
   statsNote: 'Health, Defense, Accuracy and Damage are not recorded on the sheet yet.',
 
@@ -62,4 +64,53 @@ export const AIDA = {
   ],
 };
 
-export const ALLIES = [AIDA];
+export const KITANA = {
+  id: 'kitana',
+  name: 'Kitana',
+  role: 'Grassmoon',
+  image: '/images/characters/Kitana.webp',
+  affinity: 'Shadow',
+  weakness: 'Spirit',
+  tier: SHADOW_TIER,
+  // Technical: begin combat with 5 Tech Points, +1 per Basic Attack.
+  resource: { key: 'techPoints', label: 'Tech Points', start: 5, note: 'Begin combat with 5. Gain 1 when using a Basic Attack.' },
+  stats: [
+    { label: 'Health', value: 150 },
+    { label: 'Defense', value: 18 },
+    { label: 'Accuracy', value: 8 },
+    { label: 'Damage', value: '1d12+8' },
+    { label: 'Dodge', value: 3 },
+    { label: 'Resist', value: 2 },
+    { label: 'Restore', value: 1 },
+  ],
+
+  passives: [
+    { type: 'Affinity', name: 'Shadow Affinity', desc: 'Weakness to Spirit Affinity damage.' },
+    { type: 'Aura', name: 'Occular Ward', desc: 'Dodge Checks automatically pass.' },
+    { type: 'Legendary Armor', name: 'Bunny Suit', desc: 'Gain +1 Movement and the ability to cast Super Jump once per day.' },
+    { type: 'Blessed Item', name: 'Ruby Slippers', desc: 'May use Movement phase to Teleport behind a unit within sight.' },
+    { type: 'Passive', name: 'Strider', desc: 'Can move through units.' },
+    { type: 'Passive', name: 'Technical', desc: 'Begin Combat with 5 Tech Points. Gain a Tech Point when using a Basic Attack.' },
+    { type: 'Passive', name: 'Sentinel Swiftness', desc: 'Movement 6, never suffers from movement penalties to Accuracy.' },
+    { type: 'Passive', name: 'Perfect Dodge', desc: 'The first time damage would reduce this unit to 0 HP, may perform a dodge check. This can be used against critical hits.' },
+  ],
+
+  // Techniques — `charges` is the number from the sheet; null ("-") has no limit.
+  techniques: [
+    { group: 'Chakram', charges: 1, name: 'Throw Chakram', desc: 'Attack, Range 6, deal an additional 1d12 damage.' },
+    { group: 'Chakram', charges: 1, name: 'Bounce', desc: '(Instant) When Throw Chakram hits a target, can attack an additional target within Range. Repeatable once.' },
+    { group: 'Chakram', charges: 1, name: 'Hookshot', desc: '(Free Action) Range 4, pull target 4 spaces or pull towards target 4 spaces.' },
+    { group: 'Chakram', charges: 3, name: 'Chakram Rotation', desc: 'Attack, Wave 1.' },
+    { group: 'Chakram', charges: null, name: 'Marked for Demise', desc: 'Attack, inflict Marked for Death. The next instance of dmg deals max dmg.' },
+    { group: 'Eyes', charges: null, name: 'All Seeing Eye', desc: '(Enhance) The next Attack this turn has Truestrike.' },
+    { group: 'Eyes', charges: null, name: 'Occular Ward', desc: '(Debuff) After landing a melee attack, inflict 1 stack of Occular Ward. Gain +1 Defense against this unit for each stack. Max 3 stacks. Cannot be resisted.' },
+    { group: 'Eyes', charges: 3, name: '6th Sense', desc: '(Defensive) Use a Dodge Burst.' },
+    { group: 'Eyes', charges: 3, name: 'Evil Eyes', desc: 'Make X+3 Evil Eye Attacks, where X = amount of Occular Ward stacks. Each Attack is Range 20 and deals 1d10 Shadow dmg.' },
+    { group: 'Eyes', charges: 1, name: 'Cold Stare', desc: '(Debuff) Inflict 4d4 Water dmg, Immobilize, and Expose.' },
+    { group: 'Eyes', charges: 1, name: 'Glare', desc: '(Debuff) Inflict Paralyze.' },
+    { group: 'Eyes', charges: 1, name: 'Shadow Stare', desc: '(Hex) 1d40 Shadow dmg. If 20+, Shake; 30+, Stagger; 39+, Stun.' },
+    { group: 'Eyes', charges: 1, name: 'Ultra Instinct', desc: '(Enhance) For the next 3 turns, gain Truestrike and Truedodge. Dodges do not return Attacks.' },
+  ],
+};
+
+export const ALLIES = [AIDA, KITANA];

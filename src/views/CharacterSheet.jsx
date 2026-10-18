@@ -9,7 +9,7 @@ import Tip from '../components/gil/Tip';
 import AllySheet from '../components/gil/AllySheet';
 import { Stepper, Charges, Section, HoverName } from '../components/gil/ui';
 import { TIER, SHORT_TYPE } from '../data/gil/tiers';
-import { AIDA } from '../data/gil/allies';
+import { ALLIES } from '../data/gil/allies';
 import {
   SCHOOLS, SCHOOL_BY_ID, AFFINITY_ORDER, AFF_STYLE, PAST_LOADOUTS, SCHOOL_BY_NAME,
 } from '../data/gil/schools';
@@ -251,6 +251,8 @@ export default function CharacterSheet({ onBack }) {
   const [saveName, setSaveName] = useState('');
   const [showLoadouts, setShowLoadouts] = useState(false);
   const [rollShadow, setRollShadow] = useState(true);
+  const [allyId, setAllyId] = useState(ALLIES[0].id);
+  const ally = ALLIES.find((a) => a.id === allyId) || ALLIES[0];
 
   const loadoutSchools = state.loadout.map((id) => SCHOOL_BY_ID[id]).filter(Boolean);
   const usedAffinities = new Set(loadoutSchools.map((s) => s.affinity));
@@ -532,13 +534,27 @@ export default function CharacterSheet({ onBack }) {
 
         {/* ═══════════ ALLIES ═══════════ */}
         {tab === 'allies' && (
-          <AllySheet
-            ally={AIDA}
-            battery={state.ally.battery}
-            onBattery={(v) => gil.setCounter('ally', 'battery', v)}
-            uses={state.allyUses}
-            onUse={(name, v) => gil.setCounter('allyUses', name, v)}
-          />
+          <div className="space-y-4">
+            <div className="flex gap-1.5">
+              {ALLIES.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => setAllyId(a.id)}
+                  className={`rounded border px-3 py-1 text-[12px] transition ${a.id === ally.id ? `border-neutral-600 bg-neutral-900 ${a.tier.soft}` : 'border-neutral-800 text-neutral-500 hover:border-neutral-600 hover:text-neutral-300'}`}
+                >
+                  {a.name}
+                </button>
+              ))}
+            </div>
+            <AllySheet
+              key={ally.id}
+              ally={ally}
+              resource={state.ally[ally.resource.key] ?? ally.resource.start}
+              onResource={(v) => gil.setCounter('ally', ally.resource.key, v)}
+              uses={state.allyUses}
+              onUse={(name, v) => gil.setCounter('allyUses', name, v)}
+            />
+          </div>
         )}
 
         {/* ═══════════ REFERENCE ═══════════ */}

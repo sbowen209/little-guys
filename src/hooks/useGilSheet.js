@@ -24,7 +24,7 @@ const DEFAULT = {
   uses: {}, // { [ability name]: times used this fight }
   flowers: { ...FLOWER_START }, // { [flower name]: count in play }
   bloom: {}, // { [sin]: true }
-  ally: { battery: 100 }, // Aida's Ether Battery
+  ally: { battery: 100, techPoints: 5 }, // Aida's Ether Battery, Kitana's Tech Points
   allyUses: {}, // { [technique name]: times used this fight }
 };
 
